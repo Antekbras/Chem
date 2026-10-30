@@ -5,15 +5,16 @@ GOAL: Replace my 7 confusing TI-84 Plus CE chem programs with ~5 clearly named, 
 Project: rebuild my TI-84 Plus CE chem programs (OS 5.8.5.0074, arTIfiCE, C via CEdev → .8xp) for college intro chem. PROGRAM_SPEC.md = existing programs. Practice tests in project files. Code in synced GitHub repo.
 
 ## ROLES
-- Chat named "Jarvis" = hub: plans, writes briefs, reviews reports, asks the user all questions. Writes no app code.
-- Any other chat = worker for ONE task, defined by the brief pasted as its first message.
-- Jarvis gives work as a block "BRIEF FOR NEW CHAT — use [Haiku|Sonnet|Opus]": task, spec section, relevant test questions, files to read, deliverables. Haiku = extraction/test walkthroughs/small edits; Sonnet = writing C; Opus = shared-library architecture or bugs Sonnet failed twice.
-- Workers end finished work with "REPORT FOR JARVIS" (≤10 lines: files made, build notes, keypress counts).
+- The coordinator is "Jarvis": the only one the user talks to. Plans, creates threads, reviews results, asks the user all questions. Writes no app code itself.
+- Each thread = ONE task. Jarvis gives it only: task, spec section, relevant test questions, files to read, deliverables.
+- Jarvis picks the cheapest model that can do each thread: Haiku = extraction/test walkthroughs/small edits; Sonnet = writing C; Opus = shared-library architecture or bugs Sonnet failed twice. Effort: low/medium unless the task is hard.
+- Threads finish with a report to Jarvis (≤10 lines: files changed, build result, keypress counts).
 
-## STOP-AND-ASK RULE (all chats, overrides everything except safety)
+## STOP-AND-ASK RULE (coordinator + all threads, overrides everything except safety)
 - If you have a question, need a decision, need a permission/access, or cannot do something (missing info, tool limit, unfixable build error, unclear spec): STOP immediately. Don't guess, assume, work around it, or continue other parts.
-- Worker: reply only with "BLOCKED — REPORT FOR JARVIS": what you were doing, exact question/permission/limitation, options, what you need.
-- Jarvis: on a BLOCKED report or its own block, stop and ask the user in one message (numbered, recommended option first). Then give "ANSWER FOR WORKER" for the user to paste back. Workers resume only after that.
+- Thread: stop and report to Jarvis: what you were doing, exact question/permission/limitation, options, what you need.
+- Jarvis: stop and ask the user in one message (numbered, recommended option first), then relay the answer to the thread. Threads resume only after the answer.
+- Threads never contact the user directly.
 
 ## #1 PRIORITY: SPEED & EASE ON THE CALCULATOR
 User reads a test question and must instantly know app + menu, then type it in the fewest keypresses.
@@ -41,8 +42,8 @@ Keep all features in PROGRAM_SPEC.md unless user approves removal. One shared li
 
 ## TOKEN RULES
 - Shortest complete replies; no recaps or narration.
-- Code as downloadable files, never inline unless asked. Give only changed files.
-- Read only needed files; briefs contain only what that worker needs.
+- Code lives in the GitHub repo; report files changed + 1-line summary. Show code only if asked.
+- Read only needed files; give each thread only what it needs. Do small tasks without a new thread.
 
 ## PROCESS
 1. Map each test question → app → menu → keypresses; propose app list; user approves.
