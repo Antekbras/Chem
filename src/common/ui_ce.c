@@ -8,6 +8,7 @@
 #include <ti/screen.h>
 #include <ti/getcsc.h>
 #include <ti/ui.h>
+#include <ti/flags.h>
 #include "ui.h"
 
 #define ROW_Y0   30      /* first text row under the status bar */
@@ -29,6 +30,9 @@ static void put_at(uint8_t row, uint8_t col, const char *s) {
 }
 
 void ui_begin(void) {
+    /* without this flag the OS ignores os_TextFG/BGColor, which made the
+     * inverted cursor block white on white (invisible) */
+    os_SetFlag(PUTMAP, USECOLOR);
     os_FontSelect(os_LargeFont);
     colors(C_BLACK, C_WHITE);
     os_ClrHomeFull();
@@ -36,6 +40,7 @@ void ui_begin(void) {
 
 void ui_end(void) {
     colors(C_BLACK, C_WHITE);
+    os_ResetFlag(PUTMAP, USECOLOR);
     os_ClrHomeFull();
 }
 
