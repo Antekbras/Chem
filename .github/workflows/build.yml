@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Library unit tests (host gcc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: make test
+      - name: Key counts
+        if: always()
+        run: cat build/keycounts.txt || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: keycounts
+          path: build/keycounts.txt
+
+  apps:
+    name: Build .8xp apps (CEdev)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CEdev
+        run: |
+          curl -fsSL -o cedev.tar.gz \
+            https://github.com/CE-Programming/toolchain/releases/latest/download/CEdev-Linux.tar.gz
+          tar -xzf cedev.tar.gz -C "$HOME"
+          echo "$HOME/CEdev/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: |
+          cedev-config --version || true
+          make apps
+          ls -l apps/*/bin/*.8xp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chem-apps-8xp
+          path: apps/*/bin/*.8xp
+          if-no-files-found: error
