@@ -39,6 +39,14 @@ static void put_at(uint8_t row, uint8_t col, const char *s) {
 #define LCD_H 240
 static uint16_t cell_x0 = 0, cell_y0 = ROW_Y0, cell_w = COL_PX, cell_h = ROW_PX;
 
+static char shown[UI_ROWS][UI_COLS];
+static char shown_small[UI_ROWS][UI_SMALL];
+
+static void invalidate(void) {
+    memset(shown, 0, sizeof shown);
+    memset(shown_small, 0, sizeof shown_small);
+}
+
 typedef struct { int16_t x0, y0, x1, y1; } box_t;
 
 static bool ink_box(box_t *b) {
@@ -93,6 +101,8 @@ void ui_begin(void) {
     colors(C_BLACK, C_WHITE);
     os_ClrHomeFull();
     if (!measured) { calibrate(); measured = true; }
+    memset(shown, ' ', sizeof shown);      /* cleared screen = all spaces */
+    memset(shown_small, 0, sizeof shown_small);
 }
 
 void ui_end(void) {
@@ -108,6 +118,10 @@ static void small_text(const char *s, uint16_t x, uint8_t y, uint16_t fg, uint16
     os_FontSelect(os_LargeFont);
 }
 
+/* What is on screen now, so a keypress only redraws the cells that
+ * changed (the OS text routines are slow: a full 26x10 redraw per key
+ * made typing lag). 0 = unknown, forces a redraw. */
+
 void ui_draw(const screen_t *s, const entry_t *e, uint8_t rows) {
     srow_t r[UI_ROWS];
     uint8_t n, i, crow, ccol;
@@ -115,15 +129,36 @@ void ui_draw(const screen_t *s, const entry_t *e, uint8_t rows) {
     n = ui_layout(s, e, rows, r, &crow, &ccol);
     colors(C_BLACK, C_WHITE);
     for (i = 0; i < rows; i++) {
+        const char *sm = (i < n && r[i].kind == ROW_OUT && r[i].small) ? r[i].small : "";
+        bool small_changed = strncmp(sm, shown_small[i], UI_SMALL) != 0;
+        uint8_t c = 0;
         memset(line, ' ', UI_COLS);
         line[UI_COLS] = 0;
         if (i < n) memcpy(line + r[i].col, r[i].text, r[i].len);
-        put_at(i, 0, line);
-        if (i < n && r[i].kind == ROW_OUT && r[i].small && r[i].small[0]) {
-            os_FontSelect(os_SmallFont);
-            if (os_FontGetWidth(r[i].small) + 6 < (uint24_t)r[i].col * COL_PX)
-                small_text(r[i].small, 2, (uint8_t)(ROW_Y0 + i * ROW_PX + 4), C_GREY, C_WHITE);
-            os_FontSelect(os_LargeFont);
+        if (small_changed) memset(shown[i], 0, UI_COLS);  /* repaint row under small text */
+        /* draw each run of changed cells with one OS call */
+        while (c < UI_COLS) {
+            uint8_t end;
+            char save;
+            if (line[c] == shown[i][c]) { c++; continue; }
+            end = c;
+            while (end < UI_COLS && line[end] != shown[i][end]) end++;
+            save = line[end];
+            line[end] = 0;
+            put_at(i, c, line + c);
+            line[end] = save;
+            memcpy(&shown[i][c], line + c, (size_t)(end - c));
+            c = end;
+        }
+        if (small_changed) {
+            strncpy(shown_small[i], sm, UI_SMALL - 1);
+            if (sm[0]) {
+                os_FontSelect(os_SmallFont);
+                if (os_FontGetWidth(sm) + 6 < (uint24_t)r[i].col * cell_w)
+                    small_text(sm, (uint16_t)(cell_x0 + 2),
+                               (uint8_t)(cell_y0 + i * (cell_h + 1) + 3), C_GREY, C_WHITE);
+                os_FontSelect(os_LargeFont);
+            }
         }
     }
 }
@@ -183,7 +218,7 @@ uint8_t ui_show_work(const char *title, const work_t *w) {
         while (!(k = os_GetCSC())) ;
         if (k == sk_Up && top) top--;
         else if (k == sk_Down && top + UI_ROWS - 1 < w->n) top++;
-        else return k;
+        else { invalidate(); return k; }
     }
 }
 
