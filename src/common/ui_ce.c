@@ -9,6 +9,7 @@
 #include <ti/getcsc.h>
 #include <ti/ui.h>
 #include <ti/flags.h>
+#include <sys/lcd.h>
 #include "ui.h"
 
 #define ROW_Y0   30      /* first text row under the status bar */
@@ -29,18 +30,73 @@ static void put_at(uint8_t row, uint8_t col, const char *s) {
     os_PutStrLine(s);
 }
 
+/* ---- cursor geometry, measured on the real screen ----
+ * The cursor is drawn by inverting the pixels of its cell directly in
+ * VRAM, so it shows no matter how the OS treats text colors. The cell
+ * size and position are measured once by drawing 'H' in cells (0,0) and
+ * (1,1) and finding the dark pixels. */
+#define LCD_W 320
+#define LCD_H 240
+static uint16_t cell_x0 = 0, cell_y0 = ROW_Y0, cell_w = COL_PX, cell_h = ROW_PX;
+
+typedef struct { int16_t x0, y0, x1, y1; } box_t;
+
+static bool ink_box(box_t *b) {
+    uint16_t *vram = (uint16_t *)lcd_Ram;
+    int16_t x, y;
+    b->x0 = b->y0 = 0x7FFF;
+    b->x1 = b->y1 = -1;
+    for (y = ROW_Y0; y < ROW_Y0 + 3 * ROW_PX + 10 && y < LCD_H; y++)
+        for (x = 0; x < 4 * COL_PX + 10; x++)
+            if (vram[y * LCD_W + x] != 0xFFFF) {
+                if (x < b->x0) b->x0 = x;
+                if (x > b->x1) b->x1 = x;
+                if (y < b->y0) b->y0 = y;
+                if (y > b->y1) b->y1 = y;
+            }
+    return b->x1 >= 0;
+}
+
+static void calibrate(void) {
+    box_t a, b;
+    int16_t pw, ph, gw, gh;
+    put_at(0, 0, "H");
+    if (!ink_box(&a)) return;
+    put_at(0, 0, " ");
+    put_at(1, 1, "H");
+    if (!ink_box(&b)) { put_at(1, 1, " "); return; }
+    put_at(1, 1, " ");
+    pw = (int16_t)(b.x0 - a.x0);
+    ph = (int16_t)(b.y0 - a.y0);
+    if (pw < 8 || pw > 16 || ph < 12 || ph > 26) return;   /* keep defaults */
+    gw = (int16_t)(a.x1 - a.x0 + 1);
+    gh = (int16_t)(a.y1 - a.y0 + 1);
+    cell_w = (uint16_t)pw;
+    cell_h = (uint16_t)(ph - 1);
+    cell_x0 = (uint16_t)(a.x0 > (pw - gw) / 2 ? a.x0 - (pw - gw) / 2 : 0);
+    cell_y0 = (uint16_t)(a.y0 - (ph - gh) / 2);
+    if (cell_y0 < ROW_Y0) cell_y0 = ROW_Y0;
+}
+
+static void invert_cell(uint8_t row, uint8_t col) {
+    uint16_t *vram = (uint16_t *)lcd_Ram;
+    uint16_t x0 = (uint16_t)(cell_x0 + col * cell_w), y0 = (uint16_t)(cell_y0 + row * (cell_h + 1));
+    uint16_t x, y;
+    for (y = y0; y < y0 + cell_h && y < LCD_H; y++)
+        for (x = x0; x < x0 + cell_w && x < LCD_W; x++)
+            vram[y * LCD_W + x] ^= 0xFFFF;
+}
+
 void ui_begin(void) {
-    /* without this flag the OS ignores os_TextFG/BGColor, which made the
-     * inverted cursor block white on white (invisible) */
-    os_SetFlag(PUTMAP, USECOLOR);
+    static bool measured;
     os_FontSelect(os_LargeFont);
     colors(C_BLACK, C_WHITE);
     os_ClrHomeFull();
+    if (!measured) { calibrate(); measured = true; }
 }
 
 void ui_end(void) {
     colors(C_BLACK, C_WHITE);
-    os_ResetFlag(PUTMAP, USECOLOR);
     os_ClrHomeFull();
 }
 
@@ -78,17 +134,16 @@ static void cursor(const entry_t *e, uint8_t row, uint8_t col, bool on) {
     c[1] = 0;
     c[0] = e->cur < e->len ? e->buf[e->cur] : ' ';
     if (on) {
+        /* glyph shown inverted: block, A (letter-lock), ^ (2nd), a (ALPHA), _ (insert) */
         if (e->second) c[0] = '^';
         else if (e->alpha) c[0] = 'a';
         else if (e->lock == LOCK_LET) c[0] = 'A';
         else if (e->ins) c[0] = '_';
         else c[0] = ' ';
-        colors(C_WHITE, C_BLACK);
-    } else {
-        colors(C_BLACK, C_WHITE);
     }
-    put_at(row, col, c);
     colors(C_BLACK, C_WHITE);
+    put_at(row, col, c);
+    if (on) invert_cell(row, col);
 }
 
 uint8_t ui_getkey(const screen_t *s, const entry_t *e, uint8_t rows) {
