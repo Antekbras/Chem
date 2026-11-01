@@ -78,6 +78,10 @@ static void compute(const app_def_t *d) {
     entry_done(&st.e);
 }
 
+void app_insert(const char *text) {
+    if (entry_insert(&st.e, text) == EK_NEWLINE) screen_push(&st.s, st.e.last);
+}
+
 void app_open(const app_def_t *d) {
     if (!state_load(d->var, &st, sizeof st, STATE_VERSION)) {
         memset(&st, 0, sizeof st);

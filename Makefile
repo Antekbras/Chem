@@ -10,7 +10,7 @@ APPS    = SIGFIG CONVERT ATOM NAMES REACT
 test: $(TESTS)
 	@set -e; cd build; for t in $(notdir $(TESTS)); do ./$$t; done
 
-build/test_%: tests/test_%.c $(COMMON) tests/plat_mock.c tests/*.h src/common/*.h apps/SIGFIG/src/main.c | build
+build/test_%: tests/test_%.c $(COMMON) tests/plat_mock.c tests/*.h src/common/*.h apps/SIGFIG/src/main.c apps/CONVERT/src/*.[ch] | build
 	$(CC) $(CFLAGS) -Isrc/common -o $@ $< $(COMMON) tests/plat_mock.c $(LDLIBS)
 
 build:

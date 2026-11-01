@@ -16,3 +16,8 @@ Keys: ▲/▼ letter-lock ⇄ number-lock · in number-lock MATH APPS PRGM x⁻�
 A–I, N, S (SIGFIG keeps ^ and x²) · [STO→] = → · ALPHA+key = one OS letter (X = ALPHA+[STO→], J = ALPHA+[,]) ·
 2nd+[,] = E · [,] = space · ENTER computes, the line stays editable · [GRAPH] show work · 2nd+▲/▼ scroll ·
 2nd+QUIT exits.
+
+CONVERT: `2.45cm2→mm2` · `25g kcl→mol` · `kcl` (molar mass) · `5.23E24 co2→g` · `250.0ml .640m→mol` ·
+`3.00m 25.0ml→150.0ml` (dilution) · `pcl5→p` (% P) · `10.00g n2o4→g n` · no number = conversion factor
+(`mi/hr→m/s`) · no `→` = the usual next step (g→mol, mol→g, N→mol, mol→particles) · [Y=] common
+substances · [WINDOW] units list.

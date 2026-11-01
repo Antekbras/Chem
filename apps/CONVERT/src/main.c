@@ -1,20 +1,11 @@
-/* CONVERT - units, g/mol/particles, molarity, dilution, % mass
- * Stub on the shared library: shows the typed line auto-cased. */
-#include <string.h>
+/* CONVERT - any unit to any unit, g/mol/particles, molar mass, molarity,
+ * dilution, % and element mass in a compound. One line, [STO→] = "to".
+ * [Y=] common substances  [WINDOW] units  [GRAPH] show work */
 #include "app.h"
-#include "formula.h"
-
-static void compute(const char *in, char *out, char *small, work_t *w) {
-    char echo[64];
-    (void)small;
-    app_echo(in, FP_COMPOUND, echo, sizeof echo);
-    strncpy(out, echo, UI_OUT - 1);
-    out[UI_OUT - 1] = 0;
-    work_add(w, echo, NULL, NULL, NULL);
-}
+#include "convert.h"
 
 int main(void) {
-    static const app_def_t d = {"CONVERT", "CONVRTst", SMART_ALL, compute, 0, 0, 0};
+    static const app_def_t d = {"CONVERT", "CONVRTst", SMART_ALL, convert_compute, convert_field, 0, 0};
     app_run(&d);
     return 0;
 }
