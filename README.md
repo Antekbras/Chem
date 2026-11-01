@@ -16,3 +16,20 @@ Keys: ▲/▼ letter-lock ⇄ number-lock · in number-lock MATH APPS PRGM x⁻�
 A–I, N, S (SIGFIG keeps ^ and x²) · [STO→] = → · ALPHA+key = one OS letter (X = ALPHA+[STO→], J = ALPHA+[,]) ·
 2nd+[,] = E · [,] = space · ENTER computes, the line stays editable · [GRAPH] show work · 2nd+▲/▼ scroll ·
 2nd+QUIT exits.
+
+## ATOM
+
+Type on one line: `fe` `cr` `29` `iron` → electron config (small: symbol, mass) · `fe3+` → ion config (small: d electrons) ·
+`cl37` `37cl` `c-14` → protons, neutrons, electrons · `12nm` → photon energy in J · `12nm→hz` `5.00E14hz→nm` `3.31E-19j→nm`
+`500nm→kj/mol` (small: spectrum region or color) · `green` → its wavelength range. [GRAPH] = element card (mass, EN,
+group/period/block, family, type, state, radii, isotope, full and noble-gas config, shells, valence and inner d/f e-,
+unpaired e- with para/diamagnetic, orbital boxes, Lewis dots, ions) or the photon work.
+
+| Key | Screen |
+|---|---|
+| [Y=] Table | periodic table; arrows move, 1 family 2 metal type 3 block 4 state, ENTER picks |
+| [WINDOW] Isot | isotope form: mass and % rows + average atomic mass; blank = solve; warns and normalizes if % ≠ 100 |
+| [ZOOM] Orbit | orbital reference, 10 pages; ◄ ► or ENTER, 1–9 0 jump |
+| [TRACE] Light | spectrum regions and colors; 1–3 pick c = 2.998E8 / 3.00E8 / 2.99792458E8 |
+
+Element radii and isotopes in `apps/ATOM/src/atomdata.c` come from `tools/gen_atomdata.py` (mendeleev package).
