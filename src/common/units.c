@@ -156,7 +156,8 @@ void unit_dim(const unit_t *u, udim_t *o) {
         fp_t f = d->f * fp_pow10(u->t[i].pre);
         int8_t pw = u->t[i].pow;
         for (k = 0; k < NDIM; k++) o->d[k] = (int8_t)(o->d[k] + d->d[k] * pw);
-        o->f *= FP_POW(f, pw);
+        /* integer power by multiplying: no powl (saves ~5 KB of libm) */
+        for (k = 0; k < (pw < 0 ? -pw : pw); k++) o->f = pw < 0 ? o->f / f : o->f * f;
     }
 }
 
