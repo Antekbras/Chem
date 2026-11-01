@@ -10,7 +10,7 @@
 
 #define UI_COLS   26
 #define UI_ROWS   10
-#define UI_OUT    32
+#define UI_OUT    112     /* answer rows split by '\n' */
 #define UI_SMALL  24
 #define HIST_N    12
 
