@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define WORK_LINES 16
+#define WORK_LINES 24
 #define WORK_COLS  26
 
 typedef struct {

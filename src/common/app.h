@@ -21,6 +21,13 @@ typedef struct {
 
 #define APP_DATA_MAX 48
 
+/* insert text at the cursor from a field callback (picked list item) */
+void app_insert(const char *text);
+
+/* optional, before app_run: labels for a [Y=]..[GRAPH] bar kept on the
+ * bottom row (5 labels of <= 5 chars); the line history gets 9 rows */
+void app_labels(const char *const labels[5]);
+
 /* run until 2nd+QUIT (or CLEAR on an empty screen); saves state on exit */
 void app_run(const app_def_t *d);
 /* the same loop in steps (host tests drive these) */
@@ -30,6 +37,9 @@ void app_close(const app_def_t *d);
 const entry_t *app_entry(void);
 const screen_t *app_screen(void);
 const work_t *app_work(void);
+/* from a field callback: put `text` on the entry line and compute it, as if
+ * typed + ENTER (the finished line before it goes to the history) */
+void app_enter(const char *text);
 
 /* Echo a typed line with auto-case, for the stubs and for show-work:
  * "250.0ml .640m nacl>g" -> "250.0mL .640M NaCl→g". Numbers keep their

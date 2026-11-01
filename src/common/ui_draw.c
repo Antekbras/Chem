@@ -246,6 +246,37 @@ uint8_t ui_show_work(const char *title, const work_t *w) {
     }
 }
 
+uint8_t ui_pick(const char *title, const char *const *items, uint8_t n) {
+    uint8_t top = 0, sel = 0, i, k;
+    char row[UI_COLS + 1];
+    ui_invalidate();
+    for (;;) {
+        if (sel < top) top = sel;
+        if (sel >= top + UI_ROWS - 1) top = (uint8_t)(sel - (UI_ROWS - 2));
+        text_row(0, title, C_WHITE, C_BAR);
+        for (i = 1; i < UI_ROWS; i++) {
+            uint8_t j = (uint8_t)(top + i - 1);
+            row[0] = 0;
+            if (j < n) {
+                row[0] = j < 9 ? (char)('1' + j) : j == 9 ? '0' : ' ';
+                row[1] = ':';
+                strncpy(row + 2, items[j], UI_COLS - 2);
+                row[UI_COLS] = 0;
+            }
+            text_row(i, row, j == sel ? C_WHITE : C_BLACK, j == sel ? C_BLACK : C_WHITE);
+        }
+        while (!(k = plat_getcsc())) ;
+        if (k == K_UP) sel = sel ? (uint8_t)(sel - 1) : (uint8_t)(n - 1);
+        else if (k == K_DOWN) sel = (uint8_t)(sel + 1 < n ? sel + 1 : 0);
+        else if (k == K_ENTER) return sel;
+        else {
+            static const uint8_t dig[10] = {K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9, K_0};
+            for (i = 0; i < 10 && i < n; i++) if (k == dig[i]) return i;
+            return 0xFF;
+        }
+    }
+}
+
 void ui_fields(const char *const labels[5], uint8_t sel) {
     uint8_t i, c, r = UI_ROWS - 1;
     fill(gx0, cell_y(r), (uint16_t)(UI_COLS * gpw), gbh, C_BAR);

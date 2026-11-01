@@ -64,6 +64,21 @@ int main(void) {
     n = ui_layout(&s, &e, UI_ROWS - 1, r, &cr, &cc);
     CHECK(n == UI_ROWS - 1 && cr == UI_ROWS - 2, "fields row");
 
+    /* a multi-row answer: one right-aligned row per '\n', small text on the first */
+    {
+        static screen_t m;
+        entry_t me;
+        screen_clear(&m);
+        entry_init(&me, SMART_ALL, LOCK_NUM);
+        entry_set(&me, "12.0mol n2+30.0mol h2");
+        screen_answer(&m, "H2 limiting\n2.0 mol N2 left", "2.00E1");
+        n = ui_layout(&m, &me, UI_ROWS, r, &cr, &cc);
+        CHECK(n == 3, "multi rows %d", n);
+        CHECK_STR(row(&r[1]), "               H2 limiting");
+        CHECK_STR(row(&r[2]), "           2.0 mol N2 left");
+        CHECK(!strcmp(r[1].small, "2.00E1") && !r[2].small[0], "small on first row");
+    }
+
     /* show-work lines clip to the screen width */
     {
         work_t w;

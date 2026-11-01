@@ -10,7 +10,7 @@
 
 #define UI_COLS   26
 #define UI_ROWS   10
-#define UI_OUT    32
+#define UI_OUT    112     /* answer rows split by '\n' */
 #define UI_SMALL  24
 #define HIST_N    12
 
@@ -67,6 +67,9 @@ void ui_invalidate(void);
 void ui_grid(uint16_t *x0, uint16_t *y0, uint16_t *pw, uint16_t *ph, uint16_t *bw, uint16_t *bh);
 /* glyph shown inverted at the cursor: ^ 2nd, a ALPHA, A letter lock, _ insert */
 char ui_cursor_glyph(const entry_t *e);
+/* full-screen list: ▲▼ move, ENTER or 1-9/0 picks, other keys cancel.
+ * Returns the item index, or 0xFF if cancelled. */
+uint8_t ui_pick(const char *title, const char *const *items, uint8_t n);
 /* bottom field bar for [Y=] [WINDOW] [ZOOM] [TRACE] [GRAPH]; sel = 0xFF none */
 void ui_fields(const char *const labels[5], uint8_t sel);
 

@@ -132,6 +132,16 @@ static uint8_t insert(entry_t *e, char c) {
     return r;
 }
 
+uint8_t entry_insert(entry_t *e, const char *s) {
+    uint8_t r = EK_CHANGED;
+    bool ins = e->ins;
+    if (e->done) { entry_clear(e); r = EK_NEWLINE; }
+    e->ins = true;                     /* never overwrite what is there */
+    while (*s) put(e, *s++);
+    e->ins = ins;
+    return r;
+}
+
 uint8_t entry_key(entry_t *e, uint8_t k) {
     char c;
     e->key = k;
