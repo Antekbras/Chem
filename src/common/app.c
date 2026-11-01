@@ -64,6 +64,16 @@ typedef struct {
 
 static app_state_t st;
 static work_t work;
+static const app_def_t *cur;
+static const char *const *labels;
+static uint8_t rows = UI_ROWS;
+
+void app_labels(const char *const l[5]) { labels = l; }
+
+/* the [Y=]..[GRAPH] bar, when the app has one */
+static void bar(void) {
+    if (labels) ui_fields(labels, 0xFF);
+}
 
 const entry_t *app_entry(void) { return &st.e; }
 const screen_t *app_screen(void) { return &st.s; }
@@ -83,6 +93,8 @@ void app_insert(const char *text) {
 }
 
 void app_open(const app_def_t *d) {
+    cur = d;
+    rows = labels ? UI_ROWS - 1 : UI_ROWS;
     if (!state_load(d->var, &st, sizeof st, STATE_VERSION)) {
         memset(&st, 0, sizeof st);
         entry_init(&st.e, d->smart, LOCK_NUM);
@@ -104,7 +116,14 @@ void app_open(const app_def_t *d) {
         if (d->data) memcpy(d->data, keep, d->data_size);
     }
     ui_begin();
-    ui_draw(&st.s, &st.e, UI_ROWS);
+    bar();
+    ui_draw(&st.s, &st.e, rows);
+}
+
+void app_enter(const char *text) {
+    if (st.e.done) screen_push(&st.s, st.e.last);
+    entry_set(&st.e, text);
+    compute(cur);
 }
 
 bool app_key(const app_def_t *d, uint8_t k) {
@@ -124,19 +143,24 @@ bool app_key(const app_def_t *d, uint8_t k) {
         if (st.e.len) compute(d);
         break;
     case EK_GRAPH:
-        if (work.n) ui_show_work(d->title, &work);
+        if (work.n) { ui_show_work(d->title, &work); bar(); }
         break;
     case EK_FKEY:
-        if (d->field) d->field(st.e.fkey);
+        if (d->field) {
+            d->field(st.e.fkey);       /* may take over the screen */
+            ui_begin();
+            bar();
+        }
         break;
     case EK_CLEAR_EMPTY:
         if (!st.s.n && !st.s.has_out) return false;
         screen_clear(&st.s);
         work_clear(&work);
         ui_begin();
+        bar();
         break;
     case EK_SCROLL_UP:
-        if (st.s.scroll < ui_max_scroll(&st.s, &st.e, UI_ROWS)) st.s.scroll++;
+        if (st.s.scroll < ui_max_scroll(&st.s, &st.e, rows)) st.s.scroll++;
         break;
     case EK_SCROLL_DOWN:
         if (st.s.scroll) st.s.scroll--;
@@ -144,7 +168,7 @@ bool app_key(const app_def_t *d, uint8_t k) {
     case EK_QUIT:
         return false;
     }
-    ui_draw(&st.s, &st.e, UI_ROWS);
+    ui_draw(&st.s, &st.e, rows);
     return true;
 }
 
@@ -157,6 +181,6 @@ void app_close(const app_def_t *d) {
 
 void app_run(const app_def_t *d) {
     app_open(d);
-    while (app_key(d, ui_getkey(&st.s, &st.e, UI_ROWS))) ;
+    while (app_key(d, ui_getkey(&st.s, &st.e, rows))) ;
     app_close(d);
 }
