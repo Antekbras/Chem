@@ -13,6 +13,8 @@
 #include "ionic.h"
 
 #define MAXSP 8
+/* separate functions: smaller code on the calculator than one inlined blob */
+#define NOINLINE __attribute__((noinline))
 #define NA ((fp_t)6.02214076e23L)
 
 typedef struct {
@@ -104,7 +106,7 @@ static bool add(const char *s, uint8_t len) {
 static bool addc(const char *s) { return add(s, (uint8_t)strlen(s)); }
 
 /* "12.0mol n2", ".100m 25.0ml hcl", "h2o": amounts, then the formula */
-static bool term(const char *s, uint8_t len, qty_t *amt, bool *given, const char **fs, uint8_t *fl) {
+NOINLINE static bool term(const char *s, uint8_t len, qty_t *amt, bool *given, const char **fs, uint8_t *fl) {
     const char *end = s + len, *last;
     *given = false;
     while (len && *s == ' ') { s++; len--; }
@@ -130,7 +132,7 @@ static bool term(const char *s, uint8_t len, qty_t *amt, bool *given, const char
 }
 
 /* one side "a+b+c"; a '+' that ends an ion (fe3++o2) is part of it */
-static bool side(const char *s, uint8_t len) {
+NOINLINE static bool side(const char *s, uint8_t len) {
     uint8_t i = 0, st = 0;
     for (;;) {
         if (i == len || (s[i] == '+' && !(i && !is_sep(s[i - 1]) && (i + 1 == len || is_sep(s[i + 1]))))) {
@@ -172,12 +174,12 @@ static void list_elements(void) {
         }
 }
 
-static bool balance(void) {
+NOINLINE static bool balance(void) {
     static int32_t a[25][MAXSP];
     uint8_t m = 0, r = 0, c, i, k, piv[25];
     bool charged = false;
     int32_t L = 1, g = 0;
-    int64_t x[MAXSP];
+    int32_t x[MAXSP];
     list_elements();
     for (i = 0; i < nels; i++, m++)
         for (c = 0; c < nsp; c++)
@@ -196,7 +198,7 @@ static bool balance(void) {
             int32_t p = a[r][c], q = a[i][c], h = 0;
             if (i == r || !q) continue;
             for (k = 0; k < nsp; k++) {
-                a[i][k] = (int32_t)((int64_t)a[i][k] * p - (int64_t)a[r][k] * q);
+                a[i][k] = a[i][k] * p - a[r][k] * q;
                 h = gcd32(h, a[i][k]);
             }
             if (h > 1) for (k = 0; k < nsp; k++) a[i][k] /= h;
@@ -207,20 +209,20 @@ static bool balance(void) {
     for (i = 0; i < r; i++) L = L / gcd32(L, a[i][piv[i]]) * (a[i][piv[i]] < 0 ? -a[i][piv[i]] : a[i][piv[i]]);
     for (c = 0; c < nsp; c++) x[c] = L;              /* free species = L */
     for (i = 0; i < r; i++) {
-        int64_t s = 0;
+        int32_t s = 0;
         for (k = 0; k < nsp; k++) {
             bool pv = false;
             uint8_t t;
             for (t = 0; t < r; t++) pv |= piv[t] == k;
-            if (!pv) s += (int64_t)a[i][k] * L;
+            if (!pv) s += a[i][k] * L;
         }
         x[piv[i]] = -s / a[i][piv[i]];
     }
     for (c = 0; c < nsp; c++) {
         if (x[c] <= 0 || x[c] > 1000000L) return false;
-        g = gcd32(g, (int32_t)x[c]);
+        g = gcd32(g, x[c]);
     }
-    for (c = 0; c < nsp; c++) sp[c].coef = (int32_t)(x[c] / g);
+    for (c = 0; c < nsp; c++) sp[c].coef = x[c] / g;
     return true;
 }
 
@@ -299,7 +301,7 @@ static bool no_rxn(const char *a, const char *b) {
 }
 
 /* fill the products of sp[0..nre); false = no reaction (why set) or unknown */
-static bool predict(void) {
+NOINLINE static bool predict(void) {
     formula_t *A = &sp[0].f, *B = nre > 1 ? &sp[1].f : 0;
     ionic_t ia, ib;
     char b[24];
@@ -465,7 +467,7 @@ static bool aq_ions(uint8_t j, ionic_t *io) {
 }
 
 /* "spectators Na+ NO3-" and "ppt AgCl" rows (double/single displacement) */
-static void ion_rows(bool dd) {
+NOINLINE static void ion_rows(bool dd) {
     char line[48], *p = put(line, "spectators");
     uint8_t j, k, n = 0;
     ionic_t a, b;
@@ -497,7 +499,7 @@ static void ion_rows(bool dd) {
 }
 
 /* "2Fe+3Cl2→2FeCl3" (pretty) ; returns position of the arrow */
-static uint8_t equation(char *b) {
+NOINLINE static uint8_t equation(char *b) {
     char *p = b, *arrow = b;
     uint8_t j;
     for (j = 0; j < nsp; j++) {
@@ -510,7 +512,7 @@ static uint8_t equation(char *b) {
     return (uint8_t)(arrow - b);
 }
 
-static void eq_rows(void) {
+NOINLINE static void eq_rows(void) {
     char b[100];
     uint8_t ar = equation(b);
     if (strlen(b) <= UI_COLS) { row(b); }
@@ -523,7 +525,7 @@ static void eq_rows(void) {
     }
 }
 
-static void atom_work(void) {
+NOINLINE static void atom_work(void) {
     uint8_t i, j;
     for (i = 0; i < nels; i++) {
         int32_t l = 0, r = 0;
@@ -546,7 +548,7 @@ static void atom_work(void) {
 static unit_t u_mol, u_g;
 
 /* typed amount -> moles; kind 0 amount, 1 mass, 2 particles */
-static bool to_mol(const sp_t *x, num_t *mol, uint8_t *kind) {
+NOINLINE static bool to_mol(const sp_t *x, num_t *mol, uint8_t *kind) {
     fp_t v;
     unit_t u = x->amt.u;
     int sf = x->amt.n.sf;
@@ -565,7 +567,7 @@ static bool to_mol(const sp_t *x, num_t *mol, uint8_t *kind) {
 }
 
 /* moles -> the number in unit `u` (empty = particles) */
-static bool from_mol(num_t mol, const formula_t *f, const unit_t *u, num_t *out) {
+NOINLINE static bool from_mol(num_t mol, const formula_t *f, const unit_t *u, num_t *out) {
     fp_t v;
     if (unit_is_empty(u)) { *out = num_mul(mol, num_exact(NA), false); return true; }
     if (unit_convert(mol.v, &u_mol, u, &v) ||
@@ -577,7 +579,7 @@ static bool from_mol(num_t mol, const formula_t *f, const unit_t *u, num_t *out)
 }
 
 /* "2.03ᴇ4 mol O₂" ; alt = the other number form */
-static void amount_text(num_t n, const unit_t *u, const formula_t *f, const char *tail, char *b, char *alt) {
+NOINLINE static void amount_text(num_t n, const unit_t *u, const formula_t *f, const char *tail, char *b, char *alt) {
     char m[32], us[16];
     char *p;
     num_fmt_answer(num_round(n), m, alt);
@@ -610,7 +612,7 @@ static void wnum(const char *a, num_t n, const char *b) {
     work_add(wk, a, x, b, NULL);
 }
 
-static bool stoich(const char *want, uint8_t wlen, char *small) {
+NOINLINE static bool stoich(const char *want, uint8_t wlen, char *small) {
     static num_t mol[MAXSP];
     num_t xi;
     uint8_t kind[MAXSP], j, lim = 0xFF, ng_re = 0;
@@ -710,7 +712,7 @@ static bool stoich(const char *want, uint8_t wlen, char *small) {
 /* ---------- the app ---------- */
 
 /* home-screen math: "Ans*.835", "*.835", "2.5*3" */
-static bool calc(const char *in, char *out, char *small) {
+NOINLINE static bool calc(const char *in, char *out, char *small) {
     expr_ctx_t c;
     qty_t q;
     char m[32], us[16];
@@ -727,7 +729,7 @@ static bool calc(const char *in, char *out, char *small) {
     return true;
 }
 
-static void react(const char *in, char *out, char *small) {
+NOINLINE static void react(const char *in, char *out, char *small) {
     const char *sec[3], *p;
     uint8_t len[3], ns = 0, i;
     bool any = false, want = false;
