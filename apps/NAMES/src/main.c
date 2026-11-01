@@ -1,20 +1,11 @@
-/* NAMES - formula <-> name
- * Stub on the shared library: shows the typed line auto-cased. */
-#include <string.h>
+/* NAMES - formula -> name and name -> formula (replaces NOMENC).
+ * Type either one; ENTER shows the answer and an info line under it,
+ * [GRAPH] shows how it was worked out. */
 #include "app.h"
-#include "formula.h"
-
-static void compute(const char *in, char *out, char *small, work_t *w) {
-    char echo[64];
-    (void)small;
-    app_echo(in, FP_COMPOUND, echo, sizeof echo);
-    strncpy(out, echo, UI_OUT - 1);
-    out[UI_OUT - 1] = 0;
-    work_add(w, echo, NULL, NULL, NULL);
-}
+#include "names.h"
 
 int main(void) {
-    static const app_def_t d = {"NAMES", "NAMESst", SMART_ALL, compute, 0, 0, 0};
+    static const app_def_t d = {"NAMES", "NAMESst", SMART_ALL, names_compute, 0, 0, 0};
     app_run(&d);
     return 0;
 }
