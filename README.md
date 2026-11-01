@@ -5,7 +5,7 @@ Five C apps (CEdev → `.8xp`) for college intro chem: **SIGFIG**, **CONVERT**, 
 
 | Path | What |
 |---|---|
-| `src/common/` | shared library: `num` (sig figs), `expr` (calculator), `units`, `formula` (auto-case, molar mass), `data` (elements, configs, ions), `entry` (one-line editor, smart lock, key planner), `ui` (home-screen look), `state` (appvar), `app` (shared app loop) |
+| `src/common/` | shared library: `num` (sig figs), `expr` (calculator), `units`, `formula` (auto-case, molar mass), `data` (elements, configs, ions), `ionic` (ions in water, solubility, strong/weak), `entry` (one-line editor, smart lock, key planner), `ui` (home-screen look), `state` (appvar), `app` (shared app loop) |
 | `apps/<NAME>/` | one app each: `src/main.c` + CEdev `makefile` |
 | `tests/` | host unit tests (`make test`), incl. every TEST_MAP key count |
 

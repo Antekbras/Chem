@@ -54,7 +54,7 @@ uint8_t app_echo(const char *in, uint8_t prefer, char *out, uint8_t max) {
 
 /* ---- the home-screen loop shared by every app ---- */
 
-#define STATE_VERSION 3
+#define STATE_VERSION 4
 
 typedef struct {
     entry_t e;
