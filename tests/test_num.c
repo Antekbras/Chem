@@ -27,6 +27,16 @@ static void fmt(fp_t v, int sf, const char *sci, const char *plain) {
     CHECK_STR(ascii(b), plain);
 }
 
+/* main answer + alternate form: plain when it shows the sig figs */
+static void ans(const char *in, const char *m, const char *a) {
+    num_t n;
+    char mm[32], aa[32];
+    num_parse(ti(in), &n);
+    num_fmt_answer(n, mm, aa);
+    CHECK(!strcmp(ascii(mm), m) && !strcmp(ascii(aa), a), "%s: got %s | %s want %s | %s",
+          in, ascii(mm), ascii(aa), m, a);
+}
+
 int main(void) {
     /* TEST_MAP topic 1, Day 1-7 + Prep */
     row("(4.82*3.0100)/(15.2-2.11)", "1.11");      /* D1 */
@@ -109,5 +119,12 @@ int main(void) {
         CHECK(!expr_eval("2/0", &c, &q) && c.err == EXPR_DIV0, "div0");
         CHECK(!expr_eval("2**3", &c, &q) && c.err == EXPR_SYNTAX, "syntax");
     }
+    ans("5.890", "5.890", "");
+    ans("61.5", "61.5", "6.15E1");
+    ans("0.013", "0.013", "1.3E-2");
+    ans("200.", "200.", "2.00E2");
+    ans("0.00045", "4.5E-4", "0.00045");
+    ans("1.50E3", "1.50E3", "1500");
+    ans("6.022E23", "6.022E23", "");
     TEST_END();
 }

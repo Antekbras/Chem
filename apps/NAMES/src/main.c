@@ -14,7 +14,7 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
 }
 
 int main(void) {
-    static const app_def_t d = {"NAMES", "NAMESst", SMART_ALL, compute, 0};
+    static const app_def_t d = {"NAMES", "NAMESst", SMART_ALL, compute, 0, 0, 0};
     app_run(&d);
     return 0;
 }

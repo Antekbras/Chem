@@ -14,10 +14,22 @@ typedef struct {
     void (*compute)(const char *in, char *out, char *small, work_t *w);
     /* optional: [Y=]..[TRACE] pressed (field 0..3) */
     void (*field)(uint8_t n);
+    /* optional app data kept across runs (e.g. SIGFIG's Ans), <= APP_DATA_MAX */
+    void *data;
+    uint16_t data_size;
 } app_def_t;
+
+#define APP_DATA_MAX 48
 
 /* run until 2nd+QUIT (or CLEAR on an empty screen); saves state on exit */
 void app_run(const app_def_t *d);
+/* the same loop in steps (host tests drive these) */
+void app_open(const app_def_t *d);
+bool app_key(const app_def_t *d, uint8_t key);   /* false = quit */
+void app_close(const app_def_t *d);
+const entry_t *app_entry(void);
+const screen_t *app_screen(void);
+const work_t *app_work(void);
 
 /* Echo a typed line with auto-case, for the stubs and for show-work:
  * "250.0ml .640m nacl>g" -> "250.0mL .640M NaCl→g". Numbers keep their

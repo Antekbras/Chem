@@ -12,7 +12,7 @@
 #define UI_ROWS   10
 #define UI_OUT    32
 #define UI_SMALL  24
-#define HIST_N    6
+#define HIST_N    12
 
 typedef struct {
     char in[ENTRY_MAX + 1];
@@ -50,7 +50,10 @@ typedef struct {
 uint8_t ui_layout(const screen_t *s, const entry_t *e, uint8_t rows,
                   srow_t *out, uint8_t *cur_row, uint8_t *cur_col);
 
-/* ---- drawing (ui_ce.c, calculator only) ---- */
+/* how far 2nd+▲ can scroll back */
+uint8_t ui_max_scroll(const screen_t *s, const entry_t *e, uint8_t rows);
+
+/* ---- drawing (ui_draw.c over plat.h) ---- */
 void ui_begin(void);                    /* clear screen, status bar */
 void ui_end(void);                      /* restore home screen */
 void ui_draw(const screen_t *s, const entry_t *e, uint8_t rows);
@@ -58,6 +61,12 @@ void ui_draw(const screen_t *s, const entry_t *e, uint8_t rows);
 uint8_t ui_getkey(const screen_t *s, const entry_t *e, uint8_t rows);
 /* full-screen show-work view; returns the key that closed it */
 uint8_t ui_show_work(const char *title, const work_t *w);
+/* forget what is on screen: the next ui_draw repaints every cell */
+void ui_invalidate(void);
+/* measured grid: origin, cell pitch, cell box size (for tests) */
+void ui_grid(uint16_t *x0, uint16_t *y0, uint16_t *pw, uint16_t *ph, uint16_t *bw, uint16_t *bh);
+/* glyph shown inverted at the cursor: ^ 2nd, a ALPHA, A letter lock, _ insert */
+char ui_cursor_glyph(const entry_t *e);
 /* bottom field bar for [Y=] [WINDOW] [ZOOM] [TRACE] [GRAPH]; sel = 0xFF none */
 void ui_fields(const char *const labels[5], uint8_t sel);
 

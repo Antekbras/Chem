@@ -54,10 +54,9 @@ static uint8_t add_out(srow_t *r, uint8_t n, const char *out, const char *small)
     return (uint8_t)(n + 1);
 }
 
-uint8_t ui_layout(const screen_t *s, const entry_t *e, uint8_t rows,
-                  srow_t *out, uint8_t *cur_row, uint8_t *cur_col) {
-    srow_t all[MAXROWS];
-    uint8_t n = 0, i, first_cur, crow, ccol, start, cnt;
+static uint8_t all_rows(const screen_t *s, const entry_t *e, srow_t *all,
+                        uint8_t *crow, uint8_t *ccol) {
+    uint8_t n = 0, i, first_cur;
     for (i = 0; i < s->n; i++) {
         n = add_in(all, n, s->h[i].in, (uint8_t)strlen(s->h[i].in));
         if (s->h[i].out[0]) n = add_out(all, n, s->h[i].out, s->h[i].small);
@@ -66,9 +65,23 @@ uint8_t ui_layout(const screen_t *s, const entry_t *e, uint8_t rows,
     /* the cursor may sit just past the last character: give it a cell */
     n = add_in(all, n, e->buf, (uint8_t)(e->len + (e->cur == e->len && e->len && e->len % UI_COLS == 0)));
     if (e->cur == e->len && e->len && e->len % UI_COLS == 0) all[n - 1].len--;
-    crow = (uint8_t)(first_cur + e->cur / UI_COLS);
-    ccol = (uint8_t)(e->cur % UI_COLS);
+    *crow = (uint8_t)(first_cur + e->cur / UI_COLS);
+    *ccol = (uint8_t)(e->cur % UI_COLS);
     if (s->has_out) n = add_out(all, n, s->out, s->small);
+    return n;
+}
+
+uint8_t ui_max_scroll(const screen_t *s, const entry_t *e, uint8_t rows) {
+    srow_t all[MAXROWS];
+    uint8_t crow, ccol, n = all_rows(s, e, all, &crow, &ccol);
+    return (uint8_t)(n > rows ? n - rows : 0);
+}
+
+uint8_t ui_layout(const screen_t *s, const entry_t *e, uint8_t rows,
+                  srow_t *out, uint8_t *cur_row, uint8_t *cur_col) {
+    srow_t all[MAXROWS];
+    uint8_t n, i, crow, ccol, start, cnt;
+    n = all_rows(s, e, all, &crow, &ccol);
     /* bottom-anchored window, moved up by scroll */
     cnt = n < rows ? n : rows;
     start = (uint8_t)(n - cnt);

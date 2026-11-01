@@ -46,5 +46,10 @@ num_t num_with_sf(fp_t v, int sf);
  * plain: "245", "0.013", "200.", or sci if the number is too big/small. */
 uint8_t num_fmt_sci(num_t a, char *buf);
 uint8_t num_fmt_plain(num_t a, char *buf);
+/* The answer as the apps show it. main: plain decimal when it shows the sig
+ * figs unambiguously and isn't tiny or huge (61.5, 0.013, 200., 5.890),
+ * else sci (1.5E3 for 2-sf 1500, 4.5E-4). alt: the other form when it adds
+ * something (sci for 0.013 -> 1.3E-2, plain for 1.5E3 -> 1500), else "". */
+void num_fmt_answer(num_t a, char *main, char *alt);
 
 #endif

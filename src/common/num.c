@@ -269,3 +269,22 @@ uint8_t num_fmt_plain(num_t a, char *buf) {
     *p = 0;
     return (uint8_t)(p - buf);
 }
+
+void num_fmt_answer(num_t a, char *main, char *alt) {
+    char p[32], sci[32];
+    uint8_t lp;
+    bool use_plain;
+    int e = a.v == 0 ? 0 : fp_exp10(a.v);
+    lp = num_fmt_plain(a, p);
+    num_fmt_sci(a, sci);
+    use_plain = !strchr(p, CH_EE) && lp <= 14 && e >= -3 && e <= 9 && !strchr(p, 'R');
+    if (use_plain && !num_is_exact(a) && !strchr(p, '.') && p[lp - 1] == '0')
+        use_plain = false;               /* "1500" hides its sig figs */
+    if (use_plain) {
+        strcpy(main, p);
+        if (e != 0) strcpy(alt, sci); else alt[0] = 0;
+    } else {
+        strcpy(main, sci);
+        if (!strchr(p, CH_EE) && lp <= 14 && !strchr(p, 'R')) strcpy(alt, p); else alt[0] = 0;
+    }
+}
