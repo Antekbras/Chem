@@ -2,8 +2,8 @@
 # Build: make   (needs CEdev on PATH; output bin/ATOM.8xp)
 NAME = ATOM
 DESCRIPTION = "Atoms, configs, light"
-COMPRESSED = NO
-ARCHIVED = NO
+COMPRESSED = YES
+ARCHIVED = YES
 
 COMMON = ../../src/common
 CFLAGS = -Wall -Wextra -Oz -I$(COMMON)

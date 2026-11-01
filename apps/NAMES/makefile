@@ -2,8 +2,8 @@
 # Build: make   (needs CEdev on PATH; output bin/NAMES.8xp)
 NAME = NAMES
 DESCRIPTION = "Formula and name"
-COMPRESSED = NO
-ARCHIVED = NO
+COMPRESSED = YES
+ARCHIVED = YES
 
 COMMON = ../../src/common
 CFLAGS = -Wall -Wextra -Oz -I$(COMMON)

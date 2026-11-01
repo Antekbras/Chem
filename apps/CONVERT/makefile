@@ -2,8 +2,8 @@
 # Build: make   (needs CEdev on PATH; output bin/CONVERT.8xp)
 NAME = CONVERT
 DESCRIPTION = "Units, moles, molarity"
-COMPRESSED = NO
-ARCHIVED = NO
+COMPRESSED = YES
+ARCHIVED = YES
 
 COMMON = ../../src/common
 CFLAGS = -Wall -Wextra -Oz -I$(COMMON)
