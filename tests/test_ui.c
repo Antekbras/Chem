@@ -45,13 +45,13 @@ int main(void) {
     CHECK(cr == n - 1 && cc == 0 && r[n - 1].len == 0, "cursor wraps");
 
     /* history keeps the last HIST_N lines; window is bottom-anchored */
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < HIST_N + 4; i++) {
         char in[8];
         in[0] = (char)('0' + i); in[1] = 0;
         screen_answer(&s, in, "");
         screen_push(&s, in);
     }
-    CHECK(s.n == HIST_N && s.h[HIST_N - 1].in[0] == '9', "history ring");
+    CHECK(s.n == HIST_N && s.h[HIST_N - 1].in[0] == (char)('0' + HIST_N + 3), "history ring");
     entry_set(&e, "7");
     n = ui_layout(&s, &e, UI_ROWS, r, &cr, &cc);
     CHECK(n == UI_ROWS && cr == UI_ROWS - 1, "bottom anchored");

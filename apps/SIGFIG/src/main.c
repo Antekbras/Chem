@@ -4,8 +4,8 @@
 #include "app.h"
 #include "expr.h"
 
-static qty_t ans;
-static bool has_ans;
+/* Ans survives closing the app (saved with the app state) */
+static struct { qty_t ans; bool has_ans; } mem;
 
 static void compute(const char *in, char *out, char *small, work_t *w) {
     expr_ctx_t c;
@@ -14,32 +14,37 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
     int sf = num_count_sf(in);
     memset(&c, 0, sizeof c);
     c.round_steps = true;
-    c.ans = ans;
-    c.has_ans = has_ans;
+    c.ans = mem.ans;
+    c.has_ans = mem.has_ans;
     c.work = w;
     if (!expr_eval(in, &c, &q)) {
         strcpy(out, expr_err_str(c.err));
         return;
     }
-    ans = q;
-    has_ans = true;
+    mem.ans = q;
+    mem.has_ans = true;
     if (sf) {                       /* one number: count its sig figs */
-        char n[24];
-        num_fmt_sci(q.n, n);
-        strcpy(small, n);
-        out[0] = (char)('0' + sf / 10);
-        out[1] = (char)('0' + sf % 10);
-        strcpy(out + 2, " sig figs");
-        if (out[0] == '0') memmove(out, out + 1, strlen(out));
+        char *p = out;
+        if (sf >= 10) *p++ = (char)('0' + sf / 10);
+        *p++ = (char)('0' + sf % 10);
+        strcpy(p, sf == 1 ? " sig fig" : " sig figs");
+        num_fmt_sci(q.n, small);
         return;
     }
-    num_fmt_sci(q.n, out);
-    if (unit_str(&q.u, u)) { strcat(out, " "); strcat(out, u); }
-    num_fmt_plain(q.n, small);
+    {
+        char main_[32], alt[32], line[64];
+        num_fmt_answer(q.n, main_, alt);
+        strcpy(line, main_);
+        if (unit_str(&q.u, u)) { strcat(line, " "); strcat(line, u); }
+        strncpy(out, line, UI_OUT - 1);
+        out[UI_OUT - 1] = 0;
+        strncpy(small, alt, UI_SMALL - 1);
+        small[UI_SMALL - 1] = 0;
+    }
 }
 
 int main(void) {
-    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0};
+    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0, &mem, sizeof mem};
     app_run(&d);
     return 0;
 }
