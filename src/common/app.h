@@ -21,6 +21,9 @@ typedef struct {
 
 #define APP_DATA_MAX 48
 
+/* insert text at the cursor from a field callback (picked list item) */
+void app_insert(const char *text);
+
 /* run until 2nd+QUIT (or CLEAR on an empty screen); saves state on exit */
 void app_run(const app_def_t *d);
 /* the same loop in steps (host tests drive these) */
