@@ -1,37 +1,124 @@
-/* ATOM - configs of atoms/ions/Z, element card, isotopes, light.
- * Stub on the shared library: element or ion -> electron configuration. */
+/* ATOM - atoms, ions, isotopes and light, typed on one line:
+ *   fe  cr  29  iron     config [Ar]4s2 3d6; [GRAPH] = element card
+ *   fe3+  cu2+           ion config; small text = d electrons
+ *   cl37  37cl  c-14     isotope: protons, neutrons, electrons
+ *   12nm  12nm→hz  5.0E14hz→nm  3.6E-19j→nm  green
+ * Field keys: [Y=] periodic table, [WINDOW] isotope form (average atomic
+ * mass, blank = solve), [ZOOM] orbital reference, [TRACE] light and c. */
 #include <string.h>
-#include "app.h"
+#include "atom.h"
 #include "formula.h"
+#include "state.h"
+
+#define AST_VAR "ATOMxs"
+#define AST_VERSION 2
+
+atom_state_t ast;
+
+static bool digit(char c) { return c >= '0' && c <= '9'; }
+
+static uint16_t read_u(const char *s, uint8_t *len) {
+    uint16_t v = 0;
+    uint8_t i = 0;
+    while (digit(s[i]) && i < 3) v = (uint16_t)(v * 10 + s[i++] - '0');
+    *len = i;
+    return v;
+}
+
+/* one element, optionally with a charge: "fe", "Fe3+", "iron" */
+static uint8_t element_of(const char *s, uint8_t len, int8_t *charge) {
+    formula_t f;
+    uint8_t z = elem_find_name(s, len);
+    *charge = 0;
+    if (z) return z;
+    if (formula_parse(s, len, FP_ELEMENT, &f) && f.nel == 1 && f.el[0].n == 1 && f.coef == 1 && !f.hydrate) {
+        *charge = f.charge;
+        return f.el[0].z;
+    }
+    return 0;
+}
+
+static void config_answer(uint8_t z, int8_t charge, char *out, char *small, work_t *w) {
+    econfig_t c;
+    char *p;
+    ast.info_z = ast.tz = z;
+    econfig(z, charge, &c);
+    econfig_str(&c, false, out);
+    if (charge) {
+        p = put_u(small, econfig_dcount(&c));
+        put_s(p, " d e-");
+    } else {
+        put_mass(fmt(small, "%S ", z), z);
+    }
+    card(z, charge, w);
+}
 
 static void compute(const char *in, char *out, char *small, work_t *w) {
-    formula_t f;
-    econfig_t c;
-    uint8_t z = 0, len = (uint8_t)strlen(in);
-    if (in[0] >= '0' && in[0] <= '9' && len <= 3) {        /* atomic number */
-        uint8_t i;
-        for (i = 0; i < len; i++) z = (uint8_t)(z * 10 + in[i] - '0');
-        f.charge = 0;
-    } else if (formula_parse(in, len, FP_ELEMENT, &f) && f.nel == 1 && f.el[0].n == 1) {
-        z = f.el[0].z;
+    uint8_t len = (uint8_t)strlen(in), n, z;
+    int8_t q = 0;
+    ast.info_z = 0;
+    if (light(in, out, small, w)) return;
+    if (digit(in[0])) {
+        uint16_t v = read_u(in, &n);
+        if (n == len) {                                   /* atomic number */
+            if (v >= 1 && v <= NUM_ELEMENTS) { config_answer((uint8_t)v, 0, out, small, w); return; }
+        } else if ((z = element_of(in + n, (uint8_t)(len - n), &q)) != 0 && v >= z) {
+            ast.info_z = ast.tz = z;
+            isotope_card(z, v, q, out, small, w);         /* 37cl */
+            return;
+        }
+    } else {
+        /* trailing mass number: cl37, c-14 */
+        uint8_t e = len;
+        while (e && digit(in[e - 1])) e--;
+        if (e && e < len && len - e <= 3) {
+            uint8_t k;
+            uint16_t a = read_u(in + e, &k);
+            uint8_t sl = (uint8_t)(in[e - 1] == '-' ? e - 1 : e);
+            z = element_of(in, sl, &q);
+            if (z && a >= z && (a > 3 || sl != e || z == 1)) {
+                ast.info_z = ast.tz = z;
+                isotope_card(z, a, q, out, small, w);
+                return;
+            }
+        }
+        z = element_of(in, len, &q);
+        if (z) {
+            econfig_t c;
+            if (econfig(z, q, &c)) { config_answer(z, q, out, small, w); return; }
+        }
     }
-    if (z < 1 || z > NUM_ELEMENTS || !econfig(z, f.charge, &c)) {
-        app_echo(in, FP_ELEMENT, out, UI_OUT);
-        return;
-    }
-    econfig_str(&c, false, out);
-    strcpy(small, elements[z].sym);
-    work_add(w, elements[z].name, NULL, NULL, NULL);
-    {
-        char full[80];
-        econfig_str(&c, true, full);
-        work_add(w, full, NULL, NULL, NULL);
-        if (strlen(full) > WORK_COLS) work_add(w, full + WORK_COLS, NULL, NULL, NULL);
+    app_echo(in, FP_ELEMENT, out, UI_OUT);
+    strcpy(small, "?");
+}
+
+static const char *const opt_items[4] = {
+    "Periodic table", "Isotopes: average mass", "Orbital reference", "Light: speed of light c"};
+
+static void field(uint8_t n) {
+    if (n < 2) {                                  /* OPTIONS */
+        n = ui_pick_at("OPTIONS", opt_items, 4, 0);
+        if (n == 1) iso_form();
+        else if (n == 2) orbital_ref();
+        else if (n == 3) light_screen();
+        else if (n == 0) table_view();
+    } else if (n == 2) {
+        table_view();
+    } else if (n == 3) {                          /* INFO: the element answered, else the work */
+        if (ast.info_z) info_pages(ast.info_z);
+        else ui_show_work("ATOM", app_work());
     }
 }
 
 int main(void) {
-    static const app_def_t d = {"ATOM", "ATOMst", SMART_ALL, compute, 0, 0, 0};
+    static const char *const labels[5] = {"OPTIONS", "OPTIONS", "TABLE", "INFO", "QUIT"};
+    static const app_def_t d = {"ATOM", "ATOMst", SMART_ALL, compute, field, 0, 0, "ATOM", "fe  fe3+  c-14  12nm\x1Chz  green"};
+    if (!state_load(AST_VAR, &ast, sizeof ast, AST_VERSION)) {
+        memset(&ast, 0, sizeof ast);
+        ast.tz = 26;
+    }
+    app_labels(labels);
     app_run(&d);
+    state_save(AST_VAR, &ast, sizeof ast, AST_VERSION);
     return 0;
 }

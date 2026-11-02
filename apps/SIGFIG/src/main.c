@@ -44,7 +44,7 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
 }
 
 int main(void) {
-    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0, &mem, sizeof mem};
+    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0, &mem, sizeof mem, "SIG FIG CALCULATOR", "2.50E3*1.2/3.456  (up/down: 1/A)"};
     app_run(&d);
     return 0;
 }
