@@ -213,24 +213,34 @@ static void lewis(uint8_t z, uint8_t dots, work_t *w) {
     if (side[2]) work_add(w, l3, NULL, NULL, NULL);
 }
 
-/* how the element reaches a noble-gas configuration */
-static void ion_rule(uint8_t z, uint8_t g, work_t *w) {
-    uint8_t cat = elements[z].cat;
+/* how the element reaches a noble-gas configuration ('^' = raised) */
+const char *ion_rule_text(uint8_t z, char *b) {
+    uint8_t cat = elements[z].cat, g = el_group(z);
     const char *s = NULL;
-    if (z == 1) s = "Shares 1e- (or H+ / H-)";
-    else if (z == 2) s = "Full shell (duet): stable";
-    else if (g == 18) s = "Full octet: very stable";
-    else if (g == 0 || (g >= 3 && g <= 12)) s = "Loses outer s e- first";
-    else if (g == 14 && cat == CAT_METAL) s = "Loses 2 or 4 e- -> cation";
-    if (s) work_add(w, s, NULL, NULL, NULL);
-    else if (cat == CAT_METAL) {
+    if (z == 1) s = "Shares 1 e^- (or H^+ / H^-)";
+    else if (z == 2) s = "Full shell (duet) - stable";
+    else if (g == 18) s = "Full octet - stable";
+    else if (g == 0) s = "Several possible charges";
+    else if (g <= 12 && g >= 3) s = "Loses outer s e^- first \x1C cation";
+    else if (g == 14 && cat == CAT_METAL) s = "Loses 2 or 4 e^- \x1C cation";
+    if (s) return strcpy(b, s);
+    if (cat == CAT_METAL) {
         uint8_t k = g > 12 ? (uint8_t)(g - 10) : g;
-        wf(w, "Loses %ue- -> %u+ cation", k, k);
+        fmt(b, "Loses %u e^- \x1C %u+ cation", k, k);
     } else if (g >= 15 && cat == CAT_NONMETAL) {
-        wf(w, "Gains %ue- -> %u- anion", 18 - g, 18 - g);
+        fmt(b, "Gains %u e^- \x1C %u- anion", 18 - g, 18 - g);
     } else {
-        wf(w, "Shares %ue- (covalent)", g > 14 ? 18 - g : g - 10);
+        fmt(b, "Shares %u e^- (covalent bonds)", g > 14 ? 18 - g : g - 10);
     }
+    return b;
+}
+
+static void ion_rule(uint8_t z, work_t *w) {
+    char b[48], *d = b;
+    const char *s;
+    for (s = ion_rule_text(z, b); *s; s++) if (*s != '^') *d++ = *s;
+    *d = 0;
+    work_add(w, b, NULL, NULL, NULL);
 }
 
 void card(uint8_t z, int8_t charge, work_t *w) {
@@ -294,7 +304,7 @@ void card(uint8_t z, int8_t charge, work_t *w) {
         p = put_s(full, "Ions");
         for (i = 0; i < 3 && elements[z].ions[i]; i++) p = fmt(p, " %S%q", z, elements[z].ions[i]);
         if (i) work_add(w, full, NULL, NULL, NULL);
-        ion_rule(z, g, w);
+        ion_rule(z, w);
     }
 }
 

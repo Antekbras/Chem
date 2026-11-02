@@ -11,7 +11,7 @@
 #include "state.h"
 
 #define AST_VAR "ATOMxs"
-#define AST_VERSION 1
+#define AST_VERSION 2
 
 atom_state_t ast;
 
@@ -41,6 +41,7 @@ static uint8_t element_of(const char *s, uint8_t len, int8_t *charge) {
 static void config_answer(uint8_t z, int8_t charge, char *out, char *small, work_t *w) {
     econfig_t c;
     char *p;
+    ast.info_z = ast.tz = z;
     econfig(z, charge, &c);
     econfig_str(&c, false, out);
     if (charge) {
@@ -55,12 +56,14 @@ static void config_answer(uint8_t z, int8_t charge, char *out, char *small, work
 static void compute(const char *in, char *out, char *small, work_t *w) {
     uint8_t len = (uint8_t)strlen(in), n, z;
     int8_t q = 0;
+    ast.info_z = 0;
     if (light(in, out, small, w)) return;
     if (digit(in[0])) {
         uint16_t v = read_u(in, &n);
         if (n == len) {                                   /* atomic number */
             if (v >= 1 && v <= NUM_ELEMENTS) { config_answer((uint8_t)v, 0, out, small, w); return; }
         } else if ((z = element_of(in + n, (uint8_t)(len - n), &q)) != 0 && v >= z) {
+            ast.info_z = ast.tz = z;
             isotope_card(z, v, q, out, small, w);         /* 37cl */
             return;
         }
@@ -74,6 +77,7 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
             uint8_t sl = (uint8_t)(in[e - 1] == '-' ? e - 1 : e);
             z = element_of(in, sl, &q);
             if (z && a >= z && (a > 3 || sl != e || z == 1)) {
+                ast.info_z = ast.tz = z;
                 isotope_card(z, a, q, out, small, w);
                 return;
             }
@@ -88,17 +92,26 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
     strcpy(small, "?");
 }
 
+static const char *const opt_items[4] = {
+    "Periodic table", "Isotopes: average mass", "Orbital reference", "Light: speed of light c"};
+
 static void field(uint8_t n) {
-    switch (n) {
-    case 0: table_view(); break;
-    case 1: iso_form(); break;
-    case 2: orbital_ref(); break;
-    case 3: light_screen(); break;
+    if (n < 2) {                                  /* OPTIONS */
+        n = ui_pick_at("OPTIONS", opt_items, 4, 0);
+        if (n == 1) iso_form();
+        else if (n == 2) orbital_ref();
+        else if (n == 3) light_screen();
+        else if (n == 0) table_view();
+    } else if (n == 2) {
+        table_view();
+    } else if (n == 3) {                          /* INFO: the element answered, else the work */
+        if (ast.info_z) info_pages(ast.info_z);
+        else ui_show_work("ATOM", app_work());
     }
 }
 
 int main(void) {
-    static const char *const labels[5] = {"Table", "Isot", "Orbit", "Light", "Work"};
+    static const char *const labels[5] = {"OPTIONS", "OPTIONS", "TABLE", "INFO", "QUIT"};
     static const app_def_t d = {"ATOM", "ATOMst", SMART_ALL, compute, field, 0, 0};
     if (!state_load(AST_VAR, &ast, sizeof ast, AST_VERSION)) {
         memset(&ast, 0, sizeof ast);
