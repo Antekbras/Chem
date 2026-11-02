@@ -2,15 +2,13 @@
  * atomic mass at the bottom. Blank = solve: average mass, one missing
  * abundance (100 - the rest), one missing mass, or two missing abundances
  * from the average. Abundances in % or as fractions. Recomputes on every
- * key; [GRAPH] shows the work. */
+ * key; [TRACE] shows the work, [GRAPH] goes back. */
 #include <string.h>
 #include "atom.h"
 #include "plat.h"
 
 #define NF (ISO_ROWS * 2 + 1)
 #define F_AVG (ISO_ROWS * 2)
-#define COL_M 4
-#define COL_P 16
 #define FW ISO_LEN
 
 static num_t val[NF];
@@ -159,15 +157,6 @@ static void solve(void) {
     }
 }
 
-static void draw_row(uint8_t r, const char *s) {
-    char line[UI_COLS + 1];
-    size_t n = strlen(s);
-    memset(line, ' ', UI_COLS);
-    memcpy(line, s, n > UI_COLS ? UI_COLS : n);
-    line[UI_COLS] = 0;
-    plat_home_put(r, 0, line);
-}
-
 static void field_text(uint8_t i, char *out) {
     if (have[i] == 2) {
         char a[32], b[32];
@@ -180,54 +169,46 @@ static void field_text(uint8_t i, char *out) {
     }
 }
 
-static void invert(uint8_t r, uint8_t c, uint8_t n) {
-    uint16_t x0, y0, pw, ph, bw, bh, x, y, *v = plat_vram();
-    ui_grid(&x0, &y0, &pw, &ph, &bw, &bh);
-    for (y = (uint16_t)(y0 + r * ph); y < y0 + r * ph + bh; y++)
-        for (x = (uint16_t)(x0 + c * pw); x < x0 + (c + n) * pw && x < LCD_W; x++)
-            v[y * LCD_W + x] ^= 0xFFFF;
+#define ROW_Y(i) (uint8_t)(52 + 26 * (i))
+static const char *const iso_tabs[5] = {"", "", "", "WORK", "BACK"};
+
+/* one input box, like PTABLE's Find box; the selected one is light blue */
+static void box(uint8_t i, uint16_t x, uint8_t y, bool sel) {
+    char f[16];
+    uint16_t bg = sel ? C_SELECT : C_WHITE, w;
+    ui_box(x, y, 118, 22, sel ? C_BLACK : C_BORDER);
+    ui_fill((uint16_t)(x + 1), (uint8_t)(y + 1), 116, 20, bg);
+    field_text(i, f);
+    w = ui_text(f, (uint16_t)(x + 4), (uint8_t)(y + 3), UI_LARGE, have[i] == 2 ? RGB(0, 90, 200) : C_BLACK, bg);
+    if (sel) ui_fill((uint16_t)(x + 5 + w), (uint8_t)(y + 3), 1, 16, C_BLACK);
 }
 
 static void draw(void) {
     uint8_t i, sel = ast.irow < ISO_ROWS ? (uint8_t)(2 * ast.irow + ast.icol) : F_AVG;
-    char line[UI_COLS + 1], f[16];
-    draw_row(0, "ISOTOPES  blank = solve");
-    draw_row(1, "    mass (u)    abund (%)");
-    for (i = 0; i <= ISO_ROWS; i++) {
-        uint8_t m = (uint8_t)(2 * i);
-        memset(line, ' ', UI_COLS);
-        line[UI_COLS] = 0;
-        if (i < ISO_ROWS) {
-            if (have[m]) {                      /* label: mass number */
-                char a[6];
-                uint16_t A = (uint16_t)(val[m].v + 0.5);
-                put_u(a, A);
-                memcpy(line, a, strlen(a));
-            } else line[0] = (char)('1' + i);
-            field_text(m, f);
-            memcpy(line + COL_M, f, strlen(f));
-            field_text(m + 1, f);
-            memcpy(line + COL_P, f, strlen(f));
-        } else {
-            memcpy(line, "avg atomic mass", 15);
-            field_text(F_AVG, f);
-            memcpy(line + COL_P, f, strlen(f));
-        }
-        draw_row((uint8_t)(2 + i), line);
+    char a[8];
+    ui_fill(0, 30, LCD_W, 190, C_WHITE);
+    ui_text("Isotope", 8, 36, 0, C_GREY, C_WHITE);
+    ui_text("Mass (u)", 64, 36, 0, C_GREY, C_WHITE);
+    ui_text("Abundance (%)", 192, 36, 0, C_GREY, C_WHITE);
+    for (i = 0; i < ISO_ROWS; i++) {
+        uint8_t m = (uint8_t)(2 * i), y = ROW_Y(i);
+        if (have[m]) put_u(a, (uint16_t)(val[m].v + 0.5));   /* label: mass number */
+        else { a[0] = (char)('1' + i); a[1] = 0; }
+        ui_fill(0, y, 58, 22, C_WHITE);
+        ui_text(a, 12, (uint8_t)(y + 3), UI_LARGE | UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
+        box(m, 60, y, sel == m);
+        box((uint8_t)(m + 1), 188, y, sel == m + 1);
     }
-    draw_row(8, msg);
-    draw_row(9, "ENTER next  GRAPH work");
-    /* cursor: the selected field, inverted, one cell past its text */
-    {
-        uint8_t col = sel == F_AVG || (sel & 1) ? COL_P : COL_M;
-        uint8_t row = sel == F_AVG ? 2 + ISO_ROWS : (uint8_t)(2 + sel / 2);
-        invert(row, col, FW);
-    }
+    ui_fill(0, ROW_Y(ISO_ROWS) - 3, LCD_W, 1, C_BORDER);
+    ui_text("Average atomic mass", 8, (uint8_t)(ROW_Y(ISO_ROWS) + 5), UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
+    box(F_AVG, 188, ROW_Y(ISO_ROWS), sel == F_AVG);
+    ui_text(msg[0] ? msg : "Leave one box blank to solve it", 8, 205, 0, msg[0] ? RGB(200, 0, 0) : C_GREY,
+            C_WHITE);
 }
 
 void iso_form(void) {
     bool second = false;
-    plat_home_reset();
+    ui_frame("ISOTOPES", "AVERAGE MASS", iso_tabs);
     solve();
     for (;;) {
         uint8_t k, sel;
@@ -263,7 +244,9 @@ void iso_form(void) {
             else { ast.icol = 0; ast.irow++; }
             if (ast.irow == ISO_ROWS) ast.icol = 0;
         } else if (k == K_GRAPH) {
-            if (iw.n) { ui_show_work("ISOTOPES", &iw); plat_home_reset(); }
+            return;
+        } else if (k == K_TRACE) {
+            if (iw.n) { ui_show_work("ISOTOPES", &iw); ui_frame("ISOTOPES", "AVERAGE MASS", iso_tabs); }
         } else {
             char c = entry_char(k, LOCK_NUM, false, false, SMART_NONE);
             if (((c >= '0' && c <= '9') || c == '.' || c == CH_NEG) && n < ISO_LEN) {

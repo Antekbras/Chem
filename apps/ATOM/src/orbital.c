@@ -6,8 +6,6 @@
 #include "atom.h"
 #include "plat.h"
 
-#define RGB(r, g, b) (uint16_t)((((b) >> 3) << 11) | (((g) >> 2) << 5) | ((r) >> 3))
-#define BAR 0xD304
 #define LH 14
 #define NL 14
 
@@ -178,7 +176,7 @@ static void disc(int16_t cx, int16_t cy, int16_t r, uint16_t col) {
     int16_t y, x;
     for (y = (int16_t)-r; y <= r; y++)
         for (x = (int16_t)-r; x <= r; x++)
-            if (x * x + y * y <= r * r) px_fill((uint16_t)(cx + x), (uint16_t)(cy + y), 1, 1, col);
+            if (x * x + y * y <= r * r) ui_fill((uint16_t)(cx + x), (uint16_t)(cy + y), 1, 1, col);
 }
 
 /* lobes on a circle of radius d around (cx,cy) */
@@ -210,14 +208,11 @@ void orbital_ref(void) {
         uint8_t i, k;
         char head[48], *p;
         page(ast.tab);
-        px_fill(0, STATUS_H, LCD_W, LCD_H - STATUS_H, 0xFFFF);
-        px_fill(0, STATUS_H, LCD_W, 16, BAR);
         p = put_u(head, (uint16_t)(ast.tab + 1));
-        p = put_s(p, "/10 ");
+        p = put_s(p, "/10  ");
         put_s(p, titles[ast.tab]);
-        plat_small(head, 4, STATUS_H + 2, 0xFFFF, BAR);
-        plat_small("\x05 \x05 1-9,0 CLEAR", 200, STATUS_H + 2, 0xFFFF, BAR);
-        for (i = 0; i < nl; i++) plat_small(pg[i], 4, (uint8_t)(STATUS_H + 20 + i * LH), 0, 0xFFFF);
+        ui_page("Orbital reference", head, C_NAVY, ast.tab, 10);
+        for (i = 0; i < nl; i++) ui_text(pg[i], 8, (uint8_t)(40 + i * LH), 0, C_BLACK, C_WHITE);
         shape(ast.tab);
         k = wait_key();
         if (k == K_RIGHT || k == K_ENTER) ast.tab = (uint8_t)((ast.tab + 1) % 10);

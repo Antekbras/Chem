@@ -1,6 +1,7 @@
 """Generate apps/ATOM/src/atomdata.c from the `mendeleev` package.
    pip install mendeleev && python3 tools/gen_atomdata.py > apps/ATOM/src/atomdata.c
 Radii: empirical atomic radius (Slater) and covalent radius (Cordero), pm.
+Atomic weight: IUPAC standard (mendeleev). State: unknown from Fm (100), as PTABLE.
 Isotope: most abundant natural isotope, else the mass number in data.c
 (the longest-lived isotope)."""
 import os, re
@@ -14,7 +15,7 @@ DATA_MASS = {int(z): int(m) for m, z in re.findall(r'(\d+)UL, "[a-z]+", \{[^}]*\
 GAS = {1, 2, 7, 8, 9, 10, 17, 18, 36, 54, 86}
 LIQ = {35, 80}
 
-emp, cov, neu, st = [], [], [], []
+emp, cov, neu, st, mass = [], [], [], [], []
 for z in range(1, 119):
     e = element(z)
     emp.append(int(round(e.atomic_radius or 0)))
@@ -26,7 +27,8 @@ for z in range(1, 119):
         best = None
     a = best.mass_number if best else round(DATA_MASS[z] / 1000)
     neu.append(a - z)
-    st.append(2 if z in GAS else 1 if z in LIQ else 3 if z >= 104 else 0)
+    st.append(2 if z in GAS else 1 if z in LIQ else 3 if z >= 100 else 0)
+    mass.append(int(round((e.atomic_weight or 0) * 1000)))
 
 def arr(name, ctype, vals):
     s = f"const {ctype} {name}[NUM_ELEMENTS + 1] = {{0"
@@ -40,6 +42,8 @@ print("/* empirical atomic radius, pm (0 = no data) */")
 print(arr("rad_emp", "uint16_t", emp))
 print("/* covalent radius (Cordero), pm (0 = no data) */")
 print(arr("rad_cov", "uint16_t", cov))
+print("/* standard atomic weight x1000 (IUPAC), shown on the INFO page */")
+print(arr("mass_iupac", "uint32_t", mass))
 print("/* neutrons in the most common (or most stable) isotope */")
 print(arr("iso_n", "uint8_t", neu))
 # pack state 2 bits per element, 4 per byte

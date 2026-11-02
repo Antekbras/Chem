@@ -10,6 +10,7 @@
 /* ---- atomdata.c (generated) ---- */
 extern const uint16_t rad_emp[NUM_ELEMENTS + 1];
 extern const uint16_t rad_cov[NUM_ELEMENTS + 1];
+extern const uint32_t mass_iupac[NUM_ELEMENTS + 1];
 extern const uint8_t iso_n[NUM_ELEMENTS + 1];
 extern const uint8_t state_bits[30];
 
@@ -21,6 +22,7 @@ typedef struct {
     uint8_t view, tz;                  /* table view and selected Z */
     uint8_t tab;                       /* orbital reference tab */
     uint8_t irow, icol;                /* isotope form cursor */
+    uint8_t info_z;                    /* element of the last answer, 0 = none */
     char iso[ISO_ROWS * 2 + 1][ISO_LEN + 1]; /* mass, % per row; then avg */
 } atom_state_t;
 extern atom_state_t ast;
@@ -57,14 +59,21 @@ void light_screen(void);
 /* ---- iso.c ---- */
 void iso_form(void);
 
-/* ---- table.c ---- */
+/* how the element gets a noble-gas configuration; '^' marks raised text */
+const char *ion_rule_text(uint8_t z, char *buf);
+
+/* ---- table.c: periodic table, OPTIONS, LIST / Find ---- */
 void table_view(void);
+extern const uint16_t fam_strong[10];   /* family colors: INFO header, chips */
+char *el_name(char *d, uint8_t z);      /* "Iron" */
+
+/* ---- info.c: the 4 INFO pages; true = ENTER put it on the line ---- */
+bool info_pages(uint8_t z);
 
 /* ---- orbital.c ---- */
 void orbital_ref(void);
 
-/* ---- small pixel helpers (table.c) ---- */
-void px_fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
+/* ---- table.c ---- */
 uint8_t wait_key(void);
 
 #endif
