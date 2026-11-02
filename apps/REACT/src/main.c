@@ -11,6 +11,8 @@
 #include "expr.h"
 #include "formula.h"
 #include "ionic.h"
+#include "plat.h"
+#include "keys.h"
 
 #define MAXSP 8
 /* separate functions: smaller code on the calculator than one inlined blob */
@@ -815,8 +817,85 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
     react(in, out, small);
 }
 
+/* ---------- tabs: OPTIONS (reference pages), LIST (substances) ---------- */
+
+/* page rows: "label\tvalue" (label small grey, value large) or a plain line */
+static const char *const pg_act[] = {
+    "Li K Ba Sr Ca Na", "Mg Al Mn Zn Cr Fe", "Cd Co Ni Sn Pb", "------- H2 -------",
+    "Cu Ag Hg Pt Au", "above H2\t+acid: H2 gas", "Li..Na\t+water: H2", "halogens\tF2>Cl2>Br2>I2", 0};
+static const char *const pg_sol[] = {
+    "soluble\tNa+ K+ NH4+", "soluble\tNO3- C2H3O2-", "soluble\tClO4- ClO3-",
+    "Cl Br I\tnot Ag Pb Hg2", "SO4\tnot Ba Sr Ca Pb", "F\tnot Mg Ca Sr Ba", "OH O\tonly Ca Sr Ba",
+    "S\tonly group 2", "CO3 PO4\tonly Na K NH4", 0};
+static const char *const pg_type[] = {
+    "combination\tA+B\x1C" "AB", "decomposition\tAB\x1C" "A+B", "single displ.\tA+BC\x1C" "AC+B",
+    "double displ.\tAB+CD\x1C" "AD+CB", "combustion\t+O2\x1C" "CO2+H2O", "neutralization\tacid+base",
+    "ppt\tinsoluble product", "spectators\tions on both sides", 0};
+static const char *const pg_how[] = {
+    "fe+o2\x1C" "fe2o3  balance", "cu+hcl  predict", "12mol n2+30mol h2\x1C" "nh3",
+    "  limiting, left, yield", "...\x1C" "g o2  amount wanted", "...\x1C" "100.0g x  % yield",
+    "*.835  math on Ans", "[STO\x1C] types \x1C", "[TRACE] work  [ZOOM] list", 0};
+static const char *const *const pages[4] = {pg_act, pg_sol, pg_type, pg_how};
+static const char *const opt_items[4] = {"Activity series", "Solubility rules", "Reaction types", "How to type"};
+
+static void ref_pages(uint8_t pg) {
+    for (;;) {
+        const char *const *r = pages[pg];
+        uint8_t i, k;
+        ui_page(opt_items[pg], "LEFT/RIGHT: page  CLEAR: back", C_NAVY, pg, 4);
+        for (i = 0; r[i] && i < UI_PAGE_ROWS; i++) {
+            const char *t = strchr(r[i], '\t');
+            if (t) {
+                char l[20];
+                uint8_t n = (uint8_t)(t - r[i]);
+                memcpy(l, r[i], n);
+                l[n] = 0;
+                ui_row(i, l, t + 1);
+            } else ui_row(i, 0, r[i]);
+        }
+        while (!(k = plat_getcsc())) ;
+        if (k == K_RIGHT || k == K_ENTER) pg = (uint8_t)((pg + 1) & 3);
+        else if (k == K_LEFT) pg = (uint8_t)((pg + 3) & 3);
+        else if (k == K_1) pg = 0;
+        else if (k == K_2) pg = 1;
+        else if (k == K_3) pg = 2;
+        else if (k == K_4) pg = 3;
+        else return;
+    }
+}
+
+static const char *const subst[] = {
+    "O2", "H2", "N2", "H2O", "CO2", "NH3", "CH4", "C3H8", "C8H18", "HCl", "H2SO4", "HNO3",
+    "H3PO4", "NaOH", "KOH", "NaCl", "AgNO3", "KClO3", "CaCO3", "Fe2O3"};
+#define NSUBST (sizeof subst / sizeof subst[0])
+
+static void field(uint8_t n) {
+    if (n < 2) {
+        uint8_t i = ui_pick_at("OPTIONS", opt_items, 4, 0);
+        if (i != 0xFF) ref_pages(i);
+    } else if (n == 2) {
+        const entry_t *e = app_entry();
+        uint8_t i = ui_pick("SUBSTANCES", subst, NSUBST);
+        char t[12], *p = t;
+        const char *q;
+        if (i == 0xFF) return;
+        /* after a formula, the pick is the next species: add a '+' */
+        if (!e->done && e->cur) {
+            char c = e->buf[e->cur - 1];
+            if (c != '+' && c != ' ' && c != CH_STO && c != '=') *p++ = '+';
+        }
+        for (q = subst[i]; *q; q++) *p++ = (char)(*q >= 'A' && *q <= 'Z' ? *q + 32 : *q);
+        *p = 0;
+        app_insert(t);
+    }
+}
+
 int main(void) {
-    static const app_def_t d = {"REACT", "REACTst", SMART_ALL, compute, 0, &mem, sizeof mem, "REACTIONS", "h2+o2\x1Ch2o"};
+    static const char *const labels[5] = {"OPTIONS", "OPTIONS", "LIST", "WORK", "QUIT"};
+    static const app_def_t d = {"REACT", "REACTst", SMART_ALL, compute, field, &mem, sizeof mem,
+                                "BALANCE & STOICHIOMETRY",
+                                "fe+o2\x1C" "fe2o3  cu+hcl  12mol n2+h2\x1C" "nh3"};
+    app_labels(labels);
     app_run(&d);
     return 0;
 }
