@@ -15,6 +15,24 @@
 #define DARK RGB(82, 80, 82)
 #define ILH 18                       /* large-font line pitch */
 
+/* saturated family colors: header and swatch (as PTABLE v2) */
+static const uint16_t fam_strong[10] = {
+    RGB(255, 0, 0), RGB(255, 137, 32), RGB(0, 145, 255), RGB(197, 194, 197), RGB(0, 153, 0),
+    RGB(255, 250, 0), RGB(0, 0, 255), RGB(0, 0, 131), RGB(255, 0, 255), RGB(180, 32, 0)};
+
+uint8_t wait_key(void) {
+    uint8_t k;
+    while (!(k = plat_getcsc())) ;
+    return k;
+}
+
+/* "iron" -> "Iron" */
+static char *el_name(char *d, uint8_t z) {
+    char *e = put_s(d, elements[z].name);
+    if (*d >= 'a' && *d <= 'z') *d = (char)(*d - 32);
+    return e;
+}
+
 static const char *const page_name[4] = {
     "Element information", "Orbital diagram", "Electron configuration", "Lewis dot symbol"};
 static const char shell_ch[] = "KLMNOPQ";
@@ -356,7 +374,7 @@ bool info_pages(uint8_t z) {
         else if (k == K_LEFT) page = (uint8_t)((page + 3) & 3);
         else if (k == K_DOWN) z = z < NUM_ELEMENTS ? (uint8_t)(z + 1) : 1;
         else if (k == K_UP) z = z > 1 ? (uint8_t)(z - 1) : NUM_ELEMENTS;
-        else if (k == K_ENTER) { ast.tz = z; app_enter(elements[z].sym); return true; }
-        else if (k == K_CLEAR || k == K_GRAPH || k == K_MODE || k == K_TRACE) { ast.tz = z; return false; }
+        else if (k == K_ENTER) { ast.info_z = z; app_enter(elements[z].sym); return true; }
+        else if (k == K_CLEAR || k == K_GRAPH || k == K_MODE || k == K_TRACE) { ast.info_z = z; return false; }
     }
 }

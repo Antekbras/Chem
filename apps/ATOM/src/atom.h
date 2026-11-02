@@ -19,7 +19,6 @@ extern const uint8_t state_bits[30];
 #define ISO_LEN 10
 typedef struct {
     uint8_t c_sel;                     /* speed of light choice 0..2 */
-    uint8_t view, tz;                  /* table view and selected Z */
     uint8_t tab;                       /* orbital reference tab */
     uint8_t irow, icol;                /* isotope form cursor */
     uint8_t info_z;                    /* element of the last answer, 0 = none */
@@ -62,10 +61,6 @@ void iso_form(void);
 /* how the element gets a noble-gas configuration; '^' marks raised text */
 const char *ion_rule_text(uint8_t z, char *buf);
 
-/* ---- table.c: periodic table, OPTIONS, LIST / Find ---- */
-void table_view(void);
-extern const uint16_t fam_strong[10];   /* family colors: INFO header, chips */
-char *el_name(char *d, uint8_t z);      /* "Iron" */
 
 /* ---- info.c: the 4 INFO pages; true = ENTER put it on the line ---- */
 bool info_pages(uint8_t z);
@@ -73,7 +68,6 @@ bool info_pages(uint8_t z);
 /* ---- orbital.c ---- */
 void orbital_ref(void);
 
-/* ---- table.c ---- */
 uint8_t wait_key(void);
 
 #endif

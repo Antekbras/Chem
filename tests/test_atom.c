@@ -6,7 +6,6 @@
 #include "../apps/ATOM/src/card.c"
 #include "../apps/ATOM/src/light.c"
 #include "../apps/ATOM/src/iso.c"
-#include "../apps/ATOM/src/table.c"
 #include "../apps/ATOM/src/info.c"
 #include "../apps/ATOM/src/orbital.c"
 #include "../apps/ATOM/src/atomdata.c"
@@ -191,27 +190,24 @@ int main(void) {
     /* PTABLE-style screens run on the mock OS and return */
     {
         static const uint8_t keys[] = {
-            K_ZOOM, K_RIGHT, K_DOWN, K_DOWN,                          /* table: H -> He -> Ne -> Ar */
-            K_YEQU, K_3,                                              /* OPTIONS: block view */
-            K_ZOOM, K_2, K_6, K_ENTER,                                /* LIST: find 26 -> Fe */
-            K_ENTER, K_RIGHT, K_RIGHT, K_RIGHT, K_DOWN, K_ENTER,      /* INFO pages 1-4, next = Co, use it */
+            K_2, K_6, K_ENTER,                                        /* 26 -> Fe */
+            K_TRACE, K_RIGHT, K_RIGHT, K_RIGHT, K_DOWN, K_ENTER,      /* INFO pages 1-4, next = Co, use it */
             K_TRACE, K_LEFT, K_CLEAR,                                 /* INFO for the answer */
-            K_YEQU, K_2,                                              /* OPTIONS: isotope form */
+            K_ZOOM,                                                   /* ISO tab: isotope form */
             K_1, K_0, K_DECPNT, K_5, K_ENTER, K_5, K_0, K_ENTER, K_1, K_1, K_ENTER,
             K_ENTER, K_TRACE, K_CLEAR, K_DEL, K_GRAPH,
-            K_WINDOW, K_3,                                            /* OPTIONS: orbitals */
+            K_YEQU, K_1, K_GRAPH,                                     /* OPTIONS 1: isotope form */
+            K_WINDOW, K_2,                                            /* OPTIONS 2: orbitals */
             K_RIGHT, K_RIGHT, K_4, K_0, K_LEFT, K_6, K_7, K_8, K_9, K_CLEAR,
-            K_YEQU, K_4, K_2, K_CLEAR,                                /* OPTIONS: light, c = 3.00E8 */
-            K_ZOOM, K_ALPHA, K_COS, K_SIN, K_DOWN, K_ENTER, K_GRAPH,  /* find letters "Fe": 2nd hit Fermium */
+            K_YEQU, K_3, K_2, K_CLEAR,                                /* OPTIONS 3: light, c = 3.00E8 */
             K_2ND, K_MODE};
         mock_state_reset();
         memset(&ast, 0, sizeof ast);
         mock_keys(keys, sizeof keys);
         atom_main();
         CHECK(mock_taken == (int)sizeof keys, "field keys %d of %d", mock_taken, (int)sizeof keys);
-        CHECK(ast.c_sel == 1 && ast.tab == 8 && ast.view == 2, "screens kept state c=%u tab=%u view=%u", ast.c_sel,
-              ast.tab, ast.view);
-        CHECK(ast.tz == 100, "find picked Z %u", ast.tz);
+        CHECK(ast.c_sel == 1 && ast.tab == 8, "screens kept state c=%u tab=%u", ast.c_sel, ast.tab);
+        CHECK(ast.info_z == 27, "INFO follows the answer: Z %u", ast.info_z);
         CHECK_STR(app_entry()->last, "Co");
         CHECK_STR(ast.iso[0], "10.5");
         CHECK(ast.irow == 2 && ast.iso[2][0] == '1', "iso cursor %u", ast.irow);
@@ -223,19 +219,7 @@ int main(void) {
         for (i = 0; i < NUM_ELEMENTS * 4; i++) keys[i] = (i & 3) == 3 ? K_DOWN : K_RIGHT;
         keys[i] = K_CLEAR;
         mock_keys(keys, sizeof keys);
-        CHECK(!info_pages(1) && ast.tz == 1, "info walk ends on H (%u)", ast.tz);
+        CHECK(!info_pages(1) && ast.info_z == 1, "info walk ends on H (%u)", ast.info_z);
     }
-    /* Find: number prefixes, then symbol before name prefixes */
-    strcpy(q, "8"); search();
-    CHECK(nhits == 11 && hits[0] == 8 && hits[1] == 80 && hits[10] == 89, "find 8: %u hits", nhits);
-    strcpy(q, "Fe"); search();
-    CHECK(nhits == 2 && hits[0] == 26 && hits[1] == 100, "find Fe");
-    strcpy(q, "F"); search();
-    CHECK(nhits == 5 && hits[0] == 9 && hits[1] == 26 && hits[2] == 87 && hits[3] == 100 && hits[4] == 114, "find F");
-    strcpy(q, "Fef"); search();
-    CHECK(nhits == 0, "find Fef");
-    /* table steps like PTABLE: gaps skipped, DOWN stays out of the f rows, UP from La -> Rf */
-    CHECK(step(1, 0, 1) == 2 && step(2, 1, 0) == 10 && step(117, 1, 0) == 0 && step(57, -1, 0) == 104 &&
-          step(57, 1, 0) == 89 && step(5, -1, 0) == 0, "table steps");
     TEST_END();
 }
