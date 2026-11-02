@@ -65,6 +65,9 @@ void entry_set(entry_t *e, const char *text);
 /* call after ENTER has been handled: marks the line done, resets the lock */
 void entry_done(entry_t *e);
 uint8_t entry_key(entry_t *e, uint8_t key);
+/* insert text at the cursor (a picked list item); after ENTER it starts a
+ * new line like a typed key. Returns EK_CHANGED or EK_NEWLINE. */
+uint8_t entry_insert(entry_t *e, const char *text);
 
 /* character a key types (0 = none) */
 char entry_char(uint8_t key, uint8_t lock, bool alpha, bool second, uint32_t smart);

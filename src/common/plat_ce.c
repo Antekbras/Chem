@@ -2,6 +2,7 @@
 #ifdef __TICE__
 #include <time.h>
 #include <sys/lcd.h>
+#include <sys/power.h>
 #include <ti/screen.h>
 #include <ti/getcsc.h>
 #include "plat.h"
@@ -17,29 +18,37 @@ void plat_home_put(uint8_t row, uint8_t col, const char *s) {
     os_PutStrLine(s);
 }
 
-void plat_small(const char *s, uint16_t x, uint8_t y, uint16_t fg, uint16_t bg) {
-    os_FontSelect(os_SmallFont);
-    os_SetDrawFGColor(fg);
-    os_SetDrawBGColor(bg);
-    os_FontDrawText(s, x, y);
-    os_FontSelect(os_LargeFont);
+static void font(uint8_t flags) {
+    os_FontSelect((flags & PLAT_LARGE) ? os_LargeFont : os_SmallFont);
 }
 
-uint16_t plat_small_width(const char *s) {
+uint16_t plat_text(const char *s, uint16_t x, uint8_t y, uint8_t flags, uint16_t fg, uint16_t bg) {
+    uint16_t end;
+    font(flags);
+    os_SetDrawFGColor(fg);
+    os_SetDrawBGColor(bg);
+    end = (uint16_t)((flags & PLAT_TRANS) ? os_FontDrawTransText(s, x, y) : os_FontDrawText(s, x, y));
+    os_FontSelect(os_LargeFont);
+    return (uint16_t)(end - x);
+}
+
+uint16_t plat_text_width(const char *s, uint8_t flags) {
     uint16_t w;
-    os_FontSelect(os_SmallFont);
+    font(flags);
     w = (uint16_t)os_FontGetWidth(s);
     os_FontSelect(os_LargeFont);
     return w;
 }
 
-uint8_t plat_small_height(void) {
+uint8_t plat_text_height(uint8_t flags) {
     uint8_t h;
-    os_FontSelect(os_SmallFont);
+    font(flags);
     h = (uint8_t)os_FontGetHeight();
     os_FontSelect(os_LargeFont);
     return h;
 }
+
+uint8_t plat_battery(void) { return boot_GetBatteryStatus(); }
 
 uint8_t plat_getcsc(void) { return os_GetCSC(); }
 

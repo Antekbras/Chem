@@ -1,7 +1,7 @@
-/* ui.h - home-screen look: 26x10 large-font grid under the OS status bar,
- * line history (input left, answer right), scroll back with 2nd+▲/▼,
- * plain decimal in small grey text on the answer row, [GRAPH] show-work
- * screen, [Y=]..[GRAPH] field bar. Never uses OS Input/Prompt. */
+/* ui.h - the shared screen, styled like PTABLE v2 (plan/UI_STYLE.md):
+ * slate title bar, input box with a 1/A badge, answers listed under it
+ * (newest first, plain decimal small grey), F-key tab bar, OPTIONS-style
+ * popups and INFO-style pages. Never uses OS Input/Prompt. */
 #ifndef CHEM_UI_H
 #define CHEM_UI_H
 
@@ -10,7 +10,7 @@
 
 #define UI_COLS   26
 #define UI_ROWS   10
-#define UI_OUT    32
+#define UI_OUT    112     /* answer rows split by '\n' */
 #define UI_SMALL  24
 #define HIST_N    12
 
@@ -26,7 +26,7 @@ typedef struct {
     char out[UI_OUT];       /* answer of the current entry line */
     char small[UI_SMALL];
     bool has_out;
-    uint8_t scroll;         /* rows scrolled back */
+    uint8_t scroll;         /* history entries scrolled back */
 } screen_t;
 
 void screen_clear(screen_t *s);
@@ -53,21 +53,83 @@ uint8_t ui_layout(const screen_t *s, const entry_t *e, uint8_t rows,
 /* how far 2nd+▲ can scroll back */
 uint8_t ui_max_scroll(const screen_t *s, const entry_t *e, uint8_t rows);
 
-/* ---- drawing (ui_draw.c over plat.h) ---- */
-void ui_begin(void);                    /* clear screen, status bar */
-void ui_end(void);                      /* restore home screen */
+/* ---- drawing (ui_draw.c over plat.h): PTABLE v2 style, plan/UI_STYLE.md ---- */
+
+/* colors, BGR565 as the CE OS sets the LCD */
+#ifndef RGB
+#define RGB(r, g, b) (uint16_t)((((b) >> 3) << 11) | (((g) >> 2) << 5) | ((r) >> 3))
+#endif
+#define C_BLACK  0x0000
+#define C_WHITE  0xFFFF
+#define C_SLATE  RGB(106, 121, 139)   /* title bar, selected menu row */
+#define C_NAVY   RGB(49, 56, 74)      /* popup / page headers, mode badge */
+#define C_BORDER RGB(82, 80, 82)
+#define C_SHADOW RGB(123, 121, 123)
+#define C_BAND   RGB(246, 242, 246)   /* alternate rows */
+#define C_SELECT RGB(205, 226, 255)   /* current answer, selected list row */
+#define C_GREY   RGB(110, 110, 110)   /* hints, labels */
+
+/* text flags (same bits as plat.h) */
+#define UI_LARGE 1
+#define UI_TRANS 2
+#define UI_BOLD  4
+
+#define UI_TAB_Y  220               /* tab bar line; tabs below it */
+#define UI_BODY_Y 30                /* first body row under the title bar */
+
+/* app identity for the frame: title bar text, hint under the input box,
+ * view name at the right of the title bar, tab labels for [Y=]..[GRAPH]
+ * ("WORK" = show work, "QUIT" = quit, "" = no tab, else the app's field) */
+void ui_setup(const char *heading, const char *hint, const char *const labels[5]);
+void ui_set_view(const char *view);
+const char *const *ui_labels(void);
+
+void ui_begin(void);                    /* draw the whole frame */
+void ui_end(void);                      /* give the screen back to the OS */
+/* draw the input box and, when they changed, the answers */
 void ui_draw(const screen_t *s, const entry_t *e, uint8_t rows);
-/* wait for a key, blinking the cursor at its cell */
+/* wait for a key, blinking the caret */
 uint8_t ui_getkey(const screen_t *s, const entry_t *e, uint8_t rows);
-/* full-screen show-work view; returns the key that closed it */
-uint8_t ui_show_work(const char *title, const work_t *w);
-/* forget what is on screen: the next ui_draw repaints every cell */
+/* the next ui_draw repaints everything (after a popup or page) */
 void ui_invalidate(void);
-/* measured grid: origin, cell pitch, cell box size (for tests) */
-void ui_grid(uint16_t *x0, uint16_t *y0, uint16_t *pw, uint16_t *ph, uint16_t *bw, uint16_t *bh);
-/* glyph shown inverted at the cursor: ^ 2nd, a ALPHA, A letter lock, _ insert */
+/* tests: the full main screen, with the caret on or off */
+void ui_redraw_all(const screen_t *s, const entry_t *e, bool caret);
+/* mode badge text: 1 number lock, A letter lock, a ALPHA, 2 after 2nd */
 char ui_cursor_glyph(const entry_t *e);
-/* bottom field bar for [Y=] [WINDOW] [ZOOM] [TRACE] [GRAPH]; sel = 0xFF none */
-void ui_fields(const char *const labels[5], uint8_t sel);
+
+/* frame pieces */
+void ui_title(void);
+/* title bar + white body + tab bar for an app screen (home heading kept) */
+void ui_frame(const char *title, const char *view, const char *const labels[5]);
+void ui_tabs(const char *const labels[5], uint8_t sel);   /* sel = 0xFF none */
+#define ui_fields ui_tabs
+
+/* primitives */
+void ui_fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c);
+void ui_box(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c);   /* 1 px outline */
+uint16_t ui_text(const char *s, uint16_t x, uint8_t y, uint8_t flags, uint16_t fg, uint16_t bg);
+uint16_t ui_text_width(const char *s, uint8_t flags);
+uint8_t ui_text_height(uint8_t flags);
+/* popup panel: white, border, drop shadow */
+void ui_panel(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+
+/* pages (show work, info): header in `color`, name + subtitle, page dots */
+void ui_page(const char *name, const char *sub, uint16_t color, uint8_t page, uint8_t npages);
+/* page row i (21 px from y=39, banded): label small grey + value large,
+ * or (label NULL) a plain large line */
+void ui_row(uint8_t i, const char *label, const char *value);
+#define UI_PAGE_ROWS 9
+
+/* one screen of show work starting at line `top` (ui_show_work's frame) */
+void ui_work_page(const char *title, const work_t *w, uint8_t top);
+/* show work as a page; ▲▼ scroll, ◄► page; returns the key that closed it */
+uint8_t ui_show_work(const char *title, const work_t *w);
+/* popup list like PTABLE's OPTIONS (or Find for long lists): ▲▼ move,
+ * ENTER or 1-9/0 picks, CLEAR cancels. Returns the index or 0xFF. */
+uint8_t ui_pick(const char *title, const char *const *items, uint8_t n);
+uint8_t ui_pick_at(const char *title, const char *const *items, uint8_t n, uint8_t sel);
+
+/* legacy grid (old home-screen cells), kept so older app code builds */
+void ui_grid(uint16_t *x0, uint16_t *y0, uint16_t *pw, uint16_t *ph, uint16_t *bw, uint16_t *bh);
 
 #endif

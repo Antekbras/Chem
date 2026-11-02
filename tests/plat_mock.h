@@ -1,6 +1,6 @@
-/* plat_mock.h - host stand-in for the calculator screen and keyboard.
- * The fake OS paints home-screen cells like the real one: a fixed box per
- * cell, black on white, colors ignored, nothing outside the box. */
+/* plat_mock.h - host stand-in for the calculator screen, fonts, keyboard
+ * and appvars. Fonts are fake but deterministic (each glyph has its own
+ * pixel pattern), so a wrong or stale character shows up as a pixel diff. */
 #ifndef CHEM_PLAT_MOCK_H
 #define CHEM_PLAT_MOCK_H
 #include <stdint.h>
@@ -8,19 +8,21 @@
 #include "../src/common/plat.h"
 
 typedef struct {
-    uint16_t ox, oy;      /* cell (0,0) box origin */
-    uint16_t pw, ph;      /* pitch */
-    uint16_t bw, bh;      /* box painted per cell */
-    uint8_t sh;           /* small font height */
+    uint8_t lh, sh;       /* large / small font heights */
 } mock_os_t;
 
 extern mock_os_t mock_os;
 extern uint16_t mock_fb[LCD_W * LCD_H];
 /* draw into another buffer (for expected frames); NULL = mock_fb */
 void mock_target(uint16_t *fb);
-/* the OS glyph for ch painted in cell (r,c) of the current target */
-void mock_cell(uint8_t r, uint8_t c, char ch);
-uint16_t mock_small_width(const char *s);
+
+/* every text draw since mock_log_clear(), for "is X on screen" checks */
+typedef struct { char s[120]; uint16_t x; uint8_t y, flags; uint16_t fg, bg; } mock_text_t;
+extern mock_text_t mock_log[512];
+extern int mock_nlog;
+void mock_log_clear(void);
+/* the last draw of exactly s, or NULL */
+const mock_text_t *mock_find(const char *s);
 
 /* keys: the queue is read one entry per poll, 0 = no key this poll.
  * on_poll runs at every poll before the key is taken. */
