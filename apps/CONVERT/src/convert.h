@@ -15,7 +15,7 @@
 
 void convert_compute(const char *in, char *out, char *small, work_t *w);
 
-/* [Y=] common substances (MOLE's list) and [WINDOW] units */
+/* SUBST tab [Y=]: common substances (MOLE's list); UNITS tab [WINDOW] */
 #define NSUBST 17
 extern const char *const subst[NSUBST];
 #define NUNITLIST 36
