@@ -5,7 +5,7 @@
 #include "convert.h"
 
 int main(void) {
-    static const app_def_t d = {"CONVERT", "CONVRTst", SMART_ALL, convert_compute, convert_field, 0, 0};
+    static const app_def_t d = {"CONVERT", "CONVRTst", SMART_ALL, convert_compute, convert_field, 0, 0, "UNIT CONVERTER", "25g kcl\x1Cmol  2.45cm2\x1Cmm2  kcl"};
     app_run(&d);
     return 0;
 }

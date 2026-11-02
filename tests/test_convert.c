@@ -120,7 +120,7 @@ int main(void) {
         }
     }
     {   /* the app: [Y=] 5 types kcl, [WINDOW] picks a unit, ENTER computes */
-        static const app_def_t d = {"CONVERT", "CONVRTst", SMART_ALL, convert_compute, convert_field, 0, 0};
+        static const app_def_t d = {"CONVERT", "CONVRTst", SMART_ALL, convert_compute, convert_field, 0, 0, 0, 0};
         static const uint8_t pick5[] = {K_5}, pick_ml[] = {K_DOWN, K_DOWN, K_UP, K_ENTER}, cancel[] = {K_CLEAR};
         mock_state_reset();
         app_open(&d);

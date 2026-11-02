@@ -99,7 +99,7 @@ static void field(uint8_t n) {
 
 int main(void) {
     static const char *const labels[5] = {"Table", "Isot", "Orbit", "Light", "Work"};
-    static const app_def_t d = {"ATOM", "ATOMst", SMART_ALL, compute, field, 0, 0};
+    static const app_def_t d = {"ATOM", "ATOMst", SMART_ALL, compute, field, 0, 0, "ATOM", "fe  fe3+  c-14  12nm\x1Chz  green"};
     if (!state_load(AST_VAR, &ast, sizeof ast, AST_VERSION)) {
         memset(&ast, 0, sizeof ast);
         ast.tz = 26;

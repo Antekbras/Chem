@@ -816,7 +816,7 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
 }
 
 int main(void) {
-    static const app_def_t d = {"REACT", "REACTst", SMART_ALL, compute, 0, &mem, sizeof mem};
+    static const app_def_t d = {"REACT", "REACTst", SMART_ALL, compute, 0, &mem, sizeof mem, "REACTIONS", "h2+o2\x1Ch2o"};
     app_run(&d);
     return 0;
 }

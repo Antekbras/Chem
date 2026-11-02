@@ -5,7 +5,7 @@
 #include "names.h"
 
 int main(void) {
-    static const app_def_t d = {"NAMES", "NAMESst", SMART_ALL, names_compute, 0, 0, 0};
+    static const app_def_t d = {"NAMES", "NAMESst", SMART_ALL, names_compute, 0, 0, 0, "CHEMICAL NAMES", "nacl  iron(III) oxide  so4"};
     app_run(&d);
     return 0;
 }
