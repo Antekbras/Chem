@@ -1084,3 +1084,54 @@ void names_compute(const char *in, char *out, char *small, work_t *w) {
         finish(&c, name, fa, &f, out, w);
     }
 }
+
+/* ------------------------------------------------------- popup lists */
+
+uint8_t names_list(uint8_t kind, char show[][NL_COLS], char enter[][NL_COLS], uint8_t max) {
+    uint8_t i, n = 0, k;
+    char t[NL_COLS];
+    uint8_t total = kind == NL_IONS ? NION : kind == NL_ACIDS ? (uint8_t)(NION + NROOT)
+                  : kind == NL_COMMON ? NCOMMON : NROOT;
+    for (i = 0; i < total && n < max; i++) {
+        part_t x;
+        char *p;
+        if (kind == NL_IONS || (kind == NL_ACIDS && i < NION)) {
+            const polyion_t *pi = ion(i);
+            for (k = 0; k < i && strcmp(ion(k)->name, pi->name); k++) ;
+            if (k < i) continue;                    /* acetate written 3 ways */
+            x.pi = (int8_t)i; x.z = 0; x.q = pi->charge;
+        } else if (kind == NL_COMMON) {
+            p = cpy(show[n], common[i].f);
+            p = cpy(p, "  ");
+            cpy(p, common[i].name);
+            cpy(enter[n], common[i].name);
+            formula_pretty(show[n], show[n]);
+            n++;
+            continue;
+        } else {
+            uint8_t r = (uint8_t)(kind == NL_ACIDS ? i - NION : i);
+            x.pi = -1; x.z = roots[r].z; x.q = roots[r].q;
+        }
+        if (kind == NL_ACIDS) {
+            cmpd_t c;
+            if (!acid_name(&x, t)) continue;
+            memset(&c, 0, sizeof c);
+            c.kind = NK_ACID; c.c.pi = -1; c.c.z = 1; c.c.q = 1;
+            c.a = x; c.nc = (uint8_t)-x.q; c.na = 1;
+            cmpd_formula(&c, show[n]);
+            cpy(enter[n], t);
+        } else {
+            put_ion(show[n], &x);
+            if (x.pi >= 0) cpy(enter[n], ion((uint8_t)x.pi)->name);
+            else put_anion_name(enter[n], &x);
+            if (x.q > 0) strcat(enter[n], " ion");
+        }
+        p = show[n] + strlen(show[n]);
+        p = cpy(p, "  ");
+        cpy(p, enter[n]);
+        formula_pretty(show[n], show[n]);
+        for (p = enter[n]; *p; p++) if (*p >= 'A' && *p <= 'Z') *p = (char)(*p + 32);
+        n++;
+    }
+    return n;
+}
