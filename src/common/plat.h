@@ -14,7 +14,8 @@
 
 /* text flags */
 #define PLAT_LARGE 1           /* OS large font (else small) */
-#define PLAT_TRANS 2           /* no background */
+#define PLAT_TRANS 2
+#define PLAT_BOLD  4           /* no background */
 
 uint16_t *plat_vram(void);                 /* 320x240, 16 bpp (BGR565 like the OS) */
 void plat_home_reset(void);                /* clear the screen the OS way */
@@ -23,6 +24,8 @@ void plat_home_put(uint8_t row, uint8_t col, const char *s);
 /* OS font text at pixel (x, y); returns the width drawn */
 uint16_t plat_text(const char *s, uint16_t x, uint8_t y, uint8_t flags, uint16_t fg, uint16_t bg);
 uint16_t plat_text_width(const char *s, uint8_t flags);
+/* one character's width (cached on the calculator) */
+uint8_t plat_char_width(char c, uint8_t flags);
 uint8_t plat_text_height(uint8_t flags);
 /* shorthands */
 #define plat_small(s, x, y, fg, bg) ((void)plat_text((s), (x), (y), 0, (fg), (bg)))
