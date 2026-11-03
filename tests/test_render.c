@@ -1,14 +1,12 @@
-/* test_render: pixel-level check of the home-screen drawing.
+/* test_render: pixel-level check of the shared screen (PTABLE v2 style).
  *
- * A fake OS (plat_mock.c) paints home-screen cells like the calculator:
- * one fixed box per cell, black on white. SIGFIG runs on it for real
- * (app_run with scripted keys). At every key poll the live screen must
- * equal an expected frame built from scratch: status bar, the text of
- * ui_layout drawn with the fake OS in its own cells, the small grey
- * decimal, and the cursor box when it is in its "on" phase. So any
- * leftover pixel (cursor boxes, old characters, old small text), any
- * misalignment with the OS grid, or a broken blink fails the test. Runs
- * on several OS geometries, including one with gaps between cells. */
+ * SIGFIG runs for real (app_run with scripted keys) on a fake screen with
+ * deterministic fake fonts. At every key poll the live screen must equal
+ * the same screen drawn from scratch (frame, input box, badge, answer
+ * list, caret in its blink phase), so incremental redraws can never leave
+ * stale pixels. The current answer must be drawn large and right-aligned,
+ * and never as "...E0". Show work is checked page by page the same way.
+ * Runs with three font sizes. */
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -29,54 +27,37 @@ static bool cursor_seen_on, cursor_seen_off;
 enum { EXP_HOME, EXP_WORK };
 static int expect = EXP_HOME, work_top;
 
-/* ---- expected frames, built only from the fake OS ---- */
-
-static void exp_invert(uint8_t r, uint8_t c) {
-    int x0 = mock_os.ox + c * mock_os.pw, y0 = mock_os.oy + r * mock_os.ph, x, y;
-    for (y = y0; y < y0 + mock_os.bh; y++)
-        for (x = x0; x < x0 + mock_os.bw; x++) want[y * LCD_W + x] ^= 0xFFFF;
-}
-
-static void exp_recolor_row(uint8_t r, uint16_t fg, uint16_t bg) {
-    int x, y, y0 = mock_os.oy + r * mock_os.ph;
-    for (y = y0; y < y0 + mock_os.bh; y++)
-        for (x = mock_os.ox; x < mock_os.ox + 26 * mock_os.pw; x++)
-            want[y * LCD_W + x] = want[y * LCD_W + x] == 0xFFFF ? bg : fg;
-}
-
-static void exp_home(bool cursor_on) {
-    srow_t r[UI_ROWS];
-    uint8_t n, i, c, crow, ccol;
-    const entry_t *e = app_entry();
+/* expected frames: the whole screen drawn from scratch into `want` */
+static void exp_home(bool caret_on) {
     mock_target(want);
-    plat_home_reset();
-    n = ui_layout(app_screen(), e, UI_ROWS, r, &crow, &ccol);
-    for (i = 0; i < n; i++) {
-        for (c = 0; c < r[i].len; c++) mock_cell(i, (uint8_t)(r[i].col + c), r[i].text[c]);
-        if (r[i].kind == ROW_OUT && r[i].small && r[i].small[0] &&
-            mock_small_width(r[i].small) + 4 <= r[i].col * mock_os.pw && mock_os.sh <= mock_os.bh)
-            plat_small(r[i].small, (uint16_t)(mock_os.ox + 1),
-                       (uint8_t)(mock_os.oy + i * mock_os.ph + mock_os.bh - mock_os.sh), 0x7BEF, 0xFFFF);
-    }
-    if (cursor_on && crow != 0xFF) {
-        mock_cell(crow, ccol, ui_cursor_glyph(e));
-        exp_invert(crow, ccol);
-    }
+    ui_redraw_all(app_screen(), app_entry(), caret_on);
     mock_target(NULL);
 }
 
 static void exp_work(void) {
-    uint8_t i, c;
     mock_target(want);
-    plat_home_reset();
-    for (c = 0; c < 26; c++) mock_cell(0, c, c < strlen(app->title) ? app->title[c] : ' ');
-    exp_recolor_row(0, 0xFFFF, 0xD304);
-    for (i = 1; i < UI_ROWS; i++) {
-        int j = work_top + i - 1;
-        const char *t = j < app_work()->n ? app_work()->line[j] : "";
-        for (c = 0; c < 26 && c < strlen(t); c++) mock_cell(i, c, t[c]);
-    }
+    ui_work_page(app->title, app_work(), (uint8_t)work_top);
     mock_target(NULL);
+}
+
+/* what the current answer must look like: large, right-aligned at 312 */
+static void check_answer(void) {
+    const screen_t *s = app_screen();
+    char first[UI_OUT];
+    const mock_text_t *t;
+    size_t n;
+    if (!s->has_out || s->scroll) return;
+    n = strcspn(s->out, "\n");
+    memcpy(first, s->out, n);
+    first[n] = 0;
+    t = mock_find(first);
+    CHECK(t && (t->flags & PLAT_LARGE) && t->x + plat_text_width(first, PLAT_LARGE) == 312,
+          "answer \"%s\" drawn large at the right", ascii(first));
+    {
+        const char *a = ascii(first);
+        size_t m = strlen(a);
+        CHECK(m < 2 || strcmp(a + m - 2, "E0"), "no E0 exponent: %s", a);
+    }
 }
 
 static void dump_diff(const char *what) {
@@ -94,7 +75,7 @@ static void compare(const char *what) {
     int i;
     frames++;
     for (i = 0; i < LCD_W * LCD_H; i++)
-        if (want[i] == 0x7BEF) { small_frames++; break; }
+        if (want[i] == C_GREY && i > LCD_W * 80) { small_frames++; break; }
     if (memcmp(mock_fb, want, sizeof want)) {
         if (mism++ < 4) {
             printf("FAIL frame %d (%s) line \"%s\"\n", frames, what, ascii(app_entry()->buf));
@@ -111,27 +92,27 @@ static void on_poll(void) {
         uint8_t k = mock_last_key;
         taken = mock_taken;
         if (expect == EXP_HOME) {
-            if (k == K_GRAPH && app_work()->n) {
+            if (k == K_TRACE && app_work()->n) {
                 expect = EXP_WORK;
                 work_top = 0;
                 work_shown++;
             }
         } else if (k == K_DOWN) {
-            if (work_top + UI_ROWS - 1 < app_work()->n) work_top++;
+            if (work_top + UI_PAGE_ROWS < app_work()->n) work_top++;
         } else if (k == K_UP) {
             if (work_top) work_top--;
         } else expect = EXP_HOME;
     }
-    if (expect == EXP_WORK) {
-        exp_work(); compare("show work"); return; }
+    if (expect == EXP_WORK) { exp_work(); compare("show work"); return; }
     {
         bool on = ((mock_polls - 1) / 2) % 2 == 0;
-        uint8_t mx = ui_max_scroll(app_screen(), app_entry(), UI_ROWS);
         if (app_screen()->scroll > max_scroll_seen) max_scroll_seen = app_screen()->scroll;
-        CHECK(app_screen()->scroll <= mx, "scroll %u past top %u", app_screen()->scroll, mx);
-        exp_home(on);
+        CHECK(app_screen()->scroll <= app_screen()->n, "scroll %u past top", app_screen()->scroll);
         if (on) cursor_seen_on = true; else cursor_seen_off = true;
-        compare(on ? "cursor on" : "cursor off");
+        mock_log_clear();
+        exp_home(on);
+        check_answer();
+        compare(on ? "caret on" : "caret off");
     }
 }
 
@@ -168,7 +149,7 @@ static void run(void) {
 static const char *shown_out(void) { return ascii(app_screen()->out); }
 
 static void scenario(void) {
-    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0, &mem, sizeof mem};
+    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0, &mem, sizeof mem, "SIG FIG CALCULATOR", "2.50E3*1.2/3.456"};
     int i;
     app = &d;
     mock_state_reset();
@@ -229,7 +210,7 @@ static void scenario(void) {
     key(K_ENTER);
     key(K_2ND); key(K_MODE);
     run();
-    CHECK(max_scroll_seen >= 5, "scrolled back %d rows", max_scroll_seen);
+    CHECK(max_scroll_seen >= 5, "scrolled back %d entries", max_scroll_seen);
     CHECK(app_screen()->scroll == 0, "back at the bottom");
 
     /* 6. indicators: 2nd, ALPHA, letter lock, insert */
@@ -259,50 +240,44 @@ static void scenario(void) {
     run();
     mock_target(want); plat_home_reset(); mock_target(NULL);
     compare("after quit");
+
+    /* 9. [GRAPH] quits like PTABLE's QUIT tab */
+    key(K_GRAPH);
+    run();
 }
 
 static void scenario_work(void) {
-    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0, &mem, sizeof mem};
+    static const app_def_t d = {"SIGFIG", "SIGFIGst", SMART_CALC, compute, 0, &mem, sizeof mem, "SIG FIG CALCULATOR", "2.50E3*1.2/3.456"};
     int i;
     app = &d;
     mock_state_reset();
     type("(2.0+3.15)*1.1E2/7.0^2"); key(K_ENTER);
     for (i = 0; i < 3; i++) { type("2.0*3.00"); quick(K_ENTER); }
-    key(K_GRAPH);
+    key(K_TRACE);
     key(K_DOWN); key(K_DOWN); key(K_DOWN); key(K_UP); key(K_CLEAR);
     key(K_5); key(K_ENTER);
-    key(K_GRAPH);                       /* a lone number has no work: stays home */
+    key(K_TRACE);                       /* a lone number has no work: stays home */
     type("5.0*2.0"); key(K_ENTER);
-    key(K_GRAPH); key(K_ENTER);
+    key(K_TRACE); key(K_ENTER);
     key(K_2ND); key(K_MODE);
     run();
     CHECK(work_shown >= 2, "show work opened %d", work_shown);
 }
 
 static int geometry(int g) {
-    static const mock_os_t geo[] = {
-        {0, 30, 12, 21, 12, 21, 12},   /* cells touch */
-        {1, 32, 12, 20, 11, 17, 11},   /* gaps between cells */
-        {4, 31, 12, 21, 12, 19, 14},   /* tall small font */
-    };
+    static const mock_os_t geo[] = {{16, 12}, {18, 14}, {14, 10}};   /* font heights */
     mock_os = geo[g];
     scenario();
     scenario_work();
-    {
-        uint16_t x0, y0, pw, ph, bw, bh;
-        ui_grid(&x0, &y0, &pw, &ph, &bw, &bh);
-        CHECK(x0 == mock_os.ox && y0 == mock_os.oy && pw == mock_os.pw && ph == mock_os.ph &&
-              bw == mock_os.bw && bh == mock_os.bh, "grid %u %u %u %u %u %u", x0, y0, pw, ph, bw, bh);
-    }
-    CHECK(cursor_seen_on && cursor_seen_off, "cursor blinked");
+    CHECK(cursor_seen_on && cursor_seen_off, "caret blinked");
     CHECK(small_frames > 50, "small grey text drawn in %d frames", small_frames);
-    printf("geometry %d: %d frames compared\n", g, frames);
+    printf("fonts %d: %d frames compared\n", g, frames);
     return t_fail;
 }
 
 int main(void) {
     int g, fails = 0;
-    /* the grid is measured once per run, so each geometry gets a process */
+    /* each font geometry gets a fresh process */
     for (g = 0; g < 3; g++) {
         pid_t p = fork();
         int st;

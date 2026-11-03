@@ -31,7 +31,7 @@ void screen_push(screen_t *s, const char *in) {
     s->scroll = 0;
 }
 
-#define MAXROWS (HIST_N * 6 + 8)
+#define MAXROWS (HIST_N * 9 + 8)
 
 static uint8_t add_in(srow_t *r, uint8_t n, const char *t, uint8_t len) {
     uint8_t i = 0;
@@ -45,13 +45,21 @@ static uint8_t add_in(srow_t *r, uint8_t n, const char *t, uint8_t len) {
     return n;
 }
 
+/* an answer is one row per '\n' piece, each right aligned; the small
+ * grey text goes with the first row */
 static uint8_t add_out(srow_t *r, uint8_t n, const char *out, const char *small) {
-    uint8_t len = (uint8_t)strlen(out);
-    if (n >= MAXROWS) return n;
-    if (len > UI_COLS) len = UI_COLS;
-    r[n].kind = ROW_OUT; r[n].text = out; r[n].len = len;
-    r[n].col = (uint8_t)(UI_COLS - len); r[n].small = small;
-    return (uint8_t)(n + 1);
+    do {
+        const char *nl = strchr(out, '\n');
+        uint8_t len = (uint8_t)(nl ? (size_t)(nl - out) : strlen(out));
+        if (n >= MAXROWS) return n;
+        if (len > UI_COLS) len = UI_COLS;
+        r[n].kind = ROW_OUT; r[n].text = out; r[n].len = len;
+        r[n].col = (uint8_t)(UI_COLS - len); r[n].small = small;
+        n++;
+        small = "";
+        out = nl ? nl + 1 : 0;
+    } while (out);
+    return n;
 }
 
 static uint8_t all_rows(const screen_t *s, const entry_t *e, srow_t *all,
@@ -71,15 +79,15 @@ static uint8_t all_rows(const screen_t *s, const entry_t *e, srow_t *all,
     return n;
 }
 
+static srow_t all[MAXROWS];
+
 uint8_t ui_max_scroll(const screen_t *s, const entry_t *e, uint8_t rows) {
-    srow_t all[MAXROWS];
     uint8_t crow, ccol, n = all_rows(s, e, all, &crow, &ccol);
     return (uint8_t)(n > rows ? n - rows : 0);
 }
 
 uint8_t ui_layout(const screen_t *s, const entry_t *e, uint8_t rows,
                   srow_t *out, uint8_t *cur_row, uint8_t *cur_col) {
-    srow_t all[MAXROWS];
     uint8_t n, i, crow, ccol, start, cnt;
     n = all_rows(s, e, all, &crow, &ccol);
     /* bottom-anchored window, moved up by scroll */

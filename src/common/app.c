@@ -54,7 +54,7 @@ uint8_t app_echo(const char *in, uint8_t prefer, char *out, uint8_t max) {
 
 /* ---- the home-screen loop shared by every app ---- */
 
-#define STATE_VERSION 3
+#define STATE_VERSION 4
 
 typedef struct {
     entry_t e;
@@ -64,6 +64,17 @@ typedef struct {
 
 static app_state_t st;
 static work_t work;
+static const app_def_t *cur;
+/* "Work" and "WORK" both name the work tab */
+static bool label_is(const char *l, const char *upper) {
+    for (; *l && (*l == *upper || *l - 32 == *upper); l++, upper++) {}
+    return !*l && !*upper;
+}
+
+static const char *const default_labels[5] = {"", "", "", "WORK", "QUIT"};
+static const char *const *labels = default_labels;
+
+void app_labels(const char *const l[5]) { labels = l ? l : default_labels; }
 
 const entry_t *app_entry(void) { return &st.e; }
 const screen_t *app_screen(void) { return &st.s; }
@@ -78,7 +89,13 @@ static void compute(const app_def_t *d) {
     entry_done(&st.e);
 }
 
+void app_insert(const char *text) {
+    if (entry_insert(&st.e, text) == EK_NEWLINE) screen_push(&st.s, st.e.last);
+}
+
 void app_open(const app_def_t *d) {
+    cur = d;
+    ui_setup(d->heading ? d->heading : d->title, d->hint, labels);
     if (!state_load(d->var, &st, sizeof st, STATE_VERSION)) {
         memset(&st, 0, sizeof st);
         entry_init(&st.e, d->smart, LOCK_NUM);
@@ -103,6 +120,12 @@ void app_open(const app_def_t *d) {
     ui_draw(&st.s, &st.e, UI_ROWS);
 }
 
+void app_enter(const char *text) {
+    if (st.e.done) screen_push(&st.s, st.e.last);
+    entry_set(&st.e, text);
+    compute(cur);
+}
+
 bool app_key(const app_def_t *d, uint8_t k) {
     uint8_t r = entry_key(&st.e, k);
     /* any key but 2nd/ALPHA and the scroll keys returns to the bottom */
@@ -120,11 +143,19 @@ bool app_key(const app_def_t *d, uint8_t k) {
         if (st.e.len) compute(d);
         break;
     case EK_GRAPH:
-        if (work.n) ui_show_work(d->title, &work);
+    case EK_FKEY: {
+        uint8_t n = r == EK_GRAPH ? 4 : st.e.fkey;
+        const char *l = labels[n] ? labels[n] : "";
+        if (label_is(l, "QUIT")) return false;
+        if (label_is(l, "WORK")) {
+            if (work.n) { ui_show_work(d->title, &work); ui_begin(); }
+        } else if (d->field && (l[0] || (labels == default_labels && n < 3))) {
+            /* (apps without labels keep their [Y=]/[WINDOW]/[ZOOM] keys) */
+            d->field(n);               /* may take over the screen */
+            ui_begin();
+        }
         break;
-    case EK_FKEY:
-        if (d->field) d->field(st.e.fkey);
-        break;
+    }
     case EK_CLEAR_EMPTY:
         if (!st.s.n && !st.s.has_out) return false;
         screen_clear(&st.s);
@@ -132,7 +163,7 @@ bool app_key(const app_def_t *d, uint8_t k) {
         ui_begin();
         break;
     case EK_SCROLL_UP:
-        if (st.s.scroll < ui_max_scroll(&st.s, &st.e, UI_ROWS)) st.s.scroll++;
+        if (st.s.scroll < st.s.n) st.s.scroll++;
         break;
     case EK_SCROLL_DOWN:
         if (st.s.scroll) st.s.scroll--;
