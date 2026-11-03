@@ -271,7 +271,7 @@ void card(uint8_t z, int8_t charge, work_t *w) {
         if (rad_emp[z]) p = fmt(p, "r %upm ", rad_emp[z]);
         if (rad_cov[z]) fmt(p, "cov.r %upm", rad_cov[z]);
         if (full[0]) work_add(w, full, NULL, NULL, NULL);
-        wf(w, "Most %s: %S-%u", z == 43 || z == 61 || z >= 84 ? "stable" : "common", z, z + iso_n[z]);
+        wf(w, "Most %s: %S-%u", z == 43 || z == 61 || (z >= 84 && z <= 89) || z >= 93 ? "stable" : "common", z, z + iso_n[z]);
         wf(w, "  %up %un %ue", z, iso_n[z], z);
     }
     econfig_str(&c, true, full);

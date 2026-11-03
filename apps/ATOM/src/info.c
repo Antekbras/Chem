@@ -13,7 +13,6 @@
 #endif
 #define RED RGB(230, 0, 0)
 #define DARK RGB(82, 80, 82)
-#define ILH 18                       /* large-font line pitch */
 
 /* saturated family colors: header and swatch (as PTABLE v2) */
 static const uint16_t fam_strong[10] = {
@@ -59,10 +58,12 @@ static uint16_t rich(const char *s, uint16_t x, uint8_t y, uint8_t f, uint16_t f
     return x;
 }
 
-/* word-wrapped rich text from x0 to xmax; returns the y after it */
-static uint8_t wrap(const char *s, uint16_t x0, uint8_t y, uint16_t xmax, uint8_t f, uint16_t bg) {
+/* word-wrapped rich text from x0 to xmax; returns the y after it. Lines
+ * past the bottom of the screen are measured but not drawn; draw = false
+ * only measures. y is 16-bit so a long column never wraps round to the top. */
+static uint16_t wrap(const char *s, uint16_t x0, uint16_t y, uint16_t xmax, uint8_t f, uint16_t bg, bool draw) {
     uint16_t x = x0, sp = ui_text_width(" ", f);
-    uint8_t lh = f & UI_LARGE ? ILH : 13;
+    uint8_t h = ui_text_height(f), lh = (uint8_t)(h + (f & UI_LARGE ? 2 : 1));
     char w[40];
     while (*s) {
         uint8_t n = 0;
@@ -72,12 +73,11 @@ static uint8_t wrap(const char *s, uint16_t x0, uint8_t y, uint16_t xmax, uint8_
         w[n] = 0;
         if (!n) break;
         ww = rich(w, 0, 0, f, 0, 0, false);
-        if (x > x0 && x + ww > xmax) { x = x0; y = (uint8_t)(y + lh); }
-        x = (uint16_t)(rich(w, x, y, f, C_BLACK, bg, true) + sp);
+        if (x > x0 && x + ww > xmax) { x = x0; y = (uint16_t)(y + lh); }
+        x = (uint16_t)(rich(w, x, (uint8_t)y, f, C_BLACK, bg, draw && y + h <= LCD_H) + sp);
     }
-    return (uint8_t)(y + lh);
+    return (uint16_t)(y + lh);
 }
-
 /* "1s2 2s2" -> "1s^2 2s^2"; "[Ar]4s2" -> "[Ar] 4s^2" */
 static void cfg_rich(char *d, bool full) {
     char t[100], *s = t;
@@ -113,7 +113,8 @@ static char *put_subs(char *p, uint8_t n, uint8_t lo, uint8_t hi) {
     return p;
 }
 
-static bool radioactive(uint8_t z) { return z == 43 || z == 61 || z >= 84; }
+/* PTABLE's "(most stable)" elements */
+static bool radioactive(uint8_t z) { return z == 43 || z == 61 || (z >= 84 && z <= 89) || z >= 93; }
 static bool d_or_f(uint8_t z) { uint8_t g = el_group(z); return !g || (g >= 3 && g <= 12); }
 
 /* ---- header: family color, symbol, name, page title, Z, page dots ---- */
@@ -156,9 +157,10 @@ static void ival(uint8_t i, const char *s, uint8_t f, uint16_t fg) {
     ui_text(s, 122, (uint8_t)(39 + 21 * i + 2), (uint8_t)(UI_LARGE | f), fg, i & 1 ? C_BAND : C_WHITE);
 }
 
-static void radius(uint8_t i, const char *label, uint16_t r) {
+/* atomic radius: Clementi calculated to Z 86, measured after (as PTABLE) */
+static void radius(uint8_t i, const char *label, uint16_t r, bool emp) {
     row(i, label);
-    if (r) { fmt(buf, "%u pm", r); ival(i, buf, 0, C_BLACK); }
+    if (r) { fmt(buf, emp ? "%u pm (empirical)" : "%u pm", r); ival(i, buf, 0, C_BLACK); }
     else ival(i, "no data", 0, C_GREY);
 }
 
@@ -196,8 +198,8 @@ static void page_info(void) {
     buf[0] = (char)(buf[0] - 32);
     if (el_state(Z) == 3) put_s(p, " (predicted)");
     ival(6, buf, 0, C_BLACK);
-    radius(7, "Atomic radius", rad_emp[Z]);
-    radius(8, "Covalent radius", rad_cov[Z]);
+    radius(7, "Atomic radius", rad_emp[Z], Z > 86);
+    radius(8, "Covalent radius", rad_cov[Z], false);
 }
 
 /* ---- page 2: orbital diagram ---- */
@@ -213,15 +215,18 @@ static void arrow(uint16_t x, uint8_t y, bool up) {
 }
 
 static void isotope_line(uint8_t y, uint16_t bg) {
-    uint16_t x = 6;
+    uint16_t x = 6, rx;
+    const char *tag;
     char nm[16];
     el_name(nm, Z);
     x = (uint16_t)(x + ui_text("Isotope: ", x, y, 0, C_GREY, bg));
     fmt(buf, "%s-%u", nm, Z + iso_n[Z]);
     x = (uint16_t)(x + ui_text(buf, x, y, UI_BOLD | UI_TRANS, C_BLACK, bg));
-    ui_text(radioactive(Z) ? "  (most stable)" : "  (most common)", x, y, 0, C_GREY, bg);
     fmt(buf, "%u p^+   %u n^0", Z, iso_n[Z]);
-    rich(buf, (uint16_t)(314 - rich(buf, 0, 0, 0, 0, 0, false)), y, 0, C_BLACK, bg, true);
+    rx = (uint16_t)(314 - rich(buf, 0, 0, 0, 0, 0, false));
+    rich(buf, rx, y, 0, C_BLACK, bg, true);
+    tag = radioactive(Z) ? "  (most stable)" : "  (most common)";
+    if (x + ui_text_width(tag, 0) + 6 <= rx) ui_text(tag, x, y, 0, C_GREY, bg);   /* only if it fits */
 }
 
 static void page_orbitals(void) {
@@ -255,19 +260,24 @@ static void page_orbitals(void) {
 }
 
 /* ---- page 3: electron configuration ---- */
+static uint16_t config_col(uint8_t vf, bool draw) {
+    uint16_t y = 38;
+    uint8_t hh = ui_text_height(UI_BOLD);
+    if (draw) ui_text("Expanded (full) configuration", 8, (uint8_t)y, UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
+    cfg_rich(buf, true);
+    y = wrap(buf, 14, (uint16_t)(y + hh + 2), 314, vf, C_WHITE, draw);
+    if (draw) ui_text("Noble gas notation", 8, (uint8_t)(y + 2), UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
+    cfg_rich(buf, false);
+    y = wrap(buf, 14, (uint16_t)(y + hh + 4), 314, vf, C_WHITE, draw);
+    if (draw) ui_text("Electrons per shell", 8, (uint8_t)(y + 2), UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
+    put_shells(buf);
+    return wrap(buf, 14, (uint16_t)(y + hh + 4), 314, vf, C_WHITE, draw);
+}
+
 static void page_config(void) {
-    uint8_t y = 38;
     uint16_t x;
     char nm[16];
-    ui_text("Expanded (full) configuration", 8, y, UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
-    cfg_rich(buf, true);
-    y = wrap(buf, 14, (uint8_t)(y + 15), 314, UI_LARGE, C_WHITE);
-    ui_text("Noble gas notation", 8, (uint8_t)(y + 2), UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
-    cfg_rich(buf, false);
-    y = wrap(buf, 14, (uint8_t)(y + 17), 314, UI_LARGE, C_WHITE);
-    ui_text("Electrons per shell", 8, (uint8_t)(y + 2), UI_BOLD | UI_TRANS, C_BLACK, C_WHITE);
-    put_shells(buf);
-    ui_text(buf, 14, (uint8_t)(y + 17), UI_LARGE, C_BLACK, C_WHITE);
+    config_col(config_col(UI_LARGE, false) <= 170 ? UI_LARGE : 0, true);
     /* most common isotope, in nuclide notation */
     ui_fill(0, 170, LCD_W, 1, RGB(213, 210, 222));
     ui_fill(0, 171, LCD_W, 69, C_BAND);
@@ -309,16 +319,40 @@ static void big(uint16_t cx, uint8_t cy, uint16_t *l, uint16_t *t, uint16_t *r, 
 
 static void dot(uint16_t x, uint16_t y) { ui_fill((uint16_t)(x - 1), (uint8_t)(y - 1), 3, 3, RED); }
 
-static uint8_t pair(uint8_t y, const char *label, const char *value) {
-    rich(label, 138, y, 0, C_GREY, C_WHITE, true);
-    return wrap(value, 138, (uint8_t)(y + 11), 318, UI_LARGE, C_WHITE);
+/* right column: a small grey label over its value (vf = value font) */
+static uint16_t pair(uint16_t y, const char *label, const char *value, uint8_t vf, bool draw) {
+    if (draw && y + ui_text_height(0) <= LCD_H) rich(label, 138, (uint8_t)y, 0, C_GREY, C_WHITE, true);
+    return wrap(value, 138, (uint16_t)(y + ui_text_height(0)), 318, vf, C_WHITE, draw);
+}
+
+/* valence, outer shell, inner d/f, shells, octet / ions, unpaired: each on
+ * its own row; returns the y after the last one */
+static uint16_t lewis_col(bool df, uint8_t u, uint8_t vf, bool draw) {
+    uint16_t y = 38;
+    char *p;
+    p = fmt(buf, "%u  (", oe);
+    p = put_subs(p, on, 0, df ? 0 : 3);
+    put_s(p, ")");
+    y = pair(y, df ? "Outer-shell (valence) e^-" : "Valence electrons", buf, vf, draw);
+    fmt(buf, "n = %u  (%c shell)", on, shell_ch[on - 1]);
+    y = pair(y, "Outermost shell", buf, vf, draw);
+    if (df) {
+        p = put_subs(buf, (uint8_t)(on - 2), 3, 3);
+        *p = 0;
+        p = put_subs(p, (uint8_t)(on - 1), 2, 2);
+        y = pair(y, "Inner d / f electrons", buf[0] ? buf : "none", vf, draw);
+    }
+    put_shells(buf);
+    y = pair(y, "Electrons per shell", buf, vf, draw);
+    y = pair(y, df ? "Forming ions" : "Octet rule", ion_rule_text(Z, buf), vf, draw);
+    fmt(buf, "%u  (%s)", u, u ? "paramagnetic" : "diamagnetic");
+    return pair(y, "Unpaired electrons", buf, vf, draw);
 }
 
 static void page_lewis(void) {
-    uint8_t side[4] = {0, 0, 0, 0}, i, s_e = 0, y = 38, u = unpaired(&ec);
+    uint8_t side[4] = {0, 0, 0, 0}, i, s_e = 0, u = unpaired(&ec);
     uint16_t l, t, r, b, cx = 66;
     bool df = d_or_f(Z);
-    char *p;
     ui_fill(0, 35, 132, LCD_H - 35, C_BAND);
     for (i = 0; i < NUM_SUBSHELLS; i++) if (sub_n[i] == on && sub_l[i] == 0) s_e = ec.occ[i];
     if (df) oe = s_e;                       /* d / f: outer-shell s electrons only */
@@ -336,24 +370,8 @@ static void page_lewis(void) {
         strcpy(buf, "(outer-shell s e^- only)");
         rich(buf, (uint16_t)(cx - rich(buf, 0, 0, 0, 0, 0, false) / 2), 192, 0, C_GREY, C_BAND, true);
     }
-    /* right column */
-    p = fmt(buf, "%u  (", oe);
-    p = put_subs(p, on, 0, df ? 0 : 3);
-    put_s(p, ")");
-    y = pair(y, df ? "Outer-shell (valence) e^-" : "Valence electrons", buf);
-    fmt(buf, "n = %u  (%c shell)", on, shell_ch[on - 1]);
-    y = pair(y, "Outermost shell", buf);
-    if (df) {
-        p = put_subs(buf, (uint8_t)(on - 2), 3, 3);
-        *p = 0;
-        p = put_subs(p, (uint8_t)(on - 1), 2, 2);
-        y = pair(y, "Inner d / f electrons", buf[0] ? buf : "none");
-    }
-    put_shells(buf);
-    y = pair(y, "Electrons per shell", buf);
-    y = pair(y, df ? "Forming ions" : "Octet rule", ion_rule_text(Z, buf));
-    fmt(buf, "%u  (%s)", u, u ? "paramagnetic" : "diamagnetic");
-    pair(y, "Unpaired electrons", buf);
+    /* large values when they all fit, else small */
+    lewis_col(df, u, lewis_col(df, u, UI_LARGE, false) <= LCD_H ? UI_LARGE : 0, true);
 }
 
 bool info_pages(uint8_t z) {
