@@ -120,6 +120,18 @@ int main(void) {
     nm("hg22+", "mercury(I) ion", NULL);
     nm("tin", "Sn", NULL);
     nm("xyz", "not recognized", NULL);
+    /* acids of made-up elements (Day 1 Q17-18) */
+    nm("h2zp zephron", "hydrozephronic acid", "binary acid: hydro-ic");
+    nm("h2zp", "hydro(Zp)ic acid", NULL);
+    nm("h3mvo3 morvate mvo4", "morvous acid", "-ate, -1 O: -ous");
+    nm("h3mvo3 mvo4 morvate", "morvous acid", NULL);
+    nm("h3mvo4 morvate mvo4", "morvic acid", NULL);
+    nm("h3mvo5 morvate mvo4", "permorvic acid", NULL);
+    nm("h3mvo2 morvate mvo43-", "hypomorvous acid", NULL);
+    nm("h3mvo3 morvite mvo3", "morvous acid", NULL);
+    nm("h3mvo4 morvite mvo3", "morvic acid", NULL);
+    nm("h3mvo3 mvo4", "(Mv)ous acid", NULL);
+    nm("h3mvo3", "add the -ate ion", NULL);
     nm("h+", "hydrogen ion", NULL);
     nm("hydrogen ion", "H+", NULL);
     nm("iron(ii) ion", "Fe2+", NULL);

@@ -955,8 +955,115 @@ static void work_name(work_t *w, const char *n) {
     } else work_add(w, n, NULL, NULL, NULL);
 }
 
+/* ------------------------------------------- acids of made-up elements */
+
+/* Test questions name acids of fictional elements by the rules alone:
+ *   h2zp zephron          -> hydrozephronic acid   (binary: hydro-ic)
+ *   h3mvo3 morvate mvo4   -> morvous acid          (O count vs the -ate ion)
+ * The name word and the ion are optional; without a name the symbol
+ * stands in for the stem. */
+static bool fict_acid(char *s, char *out, work_t *w) {
+    char *tok[4], *p, sym[4], stem[24], name[40], row[40];
+    uint8_t nt = 0, i, nh = 0, sl = 0, o = 0, ion_o = 0;
+    int8_t level = 0;
+    bool oxy, have_ion = false, ite = false;
+    const char *word = NULL;
+    for (p = strtok(s, " "); p && nt < 4; p = strtok(NULL, " ")) tok[nt++] = p;
+    if (!nt || tok[0][0] != 'h') return false;
+    p = tok[0] + 1;
+    while (is_digit(*p)) nh = (uint8_t)(nh * 10 + *p++ - '0');
+    if (!nh) nh = 1;
+    while (is_low(p[sl])) sl++;
+    if (!sl || sl > 3) return false;
+    for (i = 0; p[sl + i]; i++) {
+        if (!is_digit(p[sl + i])) return false;
+        o = (uint8_t)(o * 10 + p[sl + i] - '0');
+    }
+    oxy = sl >= 2 && p[sl - 1] == 'o';
+    if (oxy && !o) o = 1;
+    if (!oxy && o) return false;
+    memcpy(sym, p, oxy ? sl - 1u : sl);
+    sym[oxy ? sl - 1 : sl] = 0;
+    sym[0] = (char)(sym[0] - 32);
+    for (i = 1; i < nt; i++) {
+        char *t = tok[i];
+        uint8_t l = (uint8_t)strlen(t), k = 0, q;
+        while (l && (t[l - 1] == '-' || t[l - 1] == (char)CH_NEG)) {   /* mvo43- */
+            t[--l] = 0;
+            if (l && is_digit(t[l - 1])) t[--l] = 0;
+        }
+        while (k < l && is_low(t[k])) k++;
+        if (k == l) { word = t; continue; }            /* a name */
+        if (!oxy || k < 2 || t[k - 1] != 'o') return false;
+        for (q = k, ion_o = 0; q < l; q++) {
+            if (!is_digit(t[q])) return false;
+            ion_o = (uint8_t)(ion_o * 10 + t[q] - '0');
+        }
+        if ((uint8_t)(k - 1) != sl - 1 || memcmp(t, p, k - 1)) return false;
+        have_ion = true;
+    }
+    if (oxy && !have_ion) {
+        strcpy(out, "add the -ate ion\nh3mvo3 morvate mvo4");
+        work_add(w, "oxyacid: type the ion too", NULL, NULL, NULL);
+        work_add(w, "  h3mvo3 morvate mvo4", NULL, NULL, NULL);
+        return true;
+    }
+    /* the stem: from the ion name, else the element name, else the symbol */
+    if (word && strlen(word) > 20) return false;
+    if (word) {
+        uint8_t l = (uint8_t)strlen(word);
+        strcpy(stem, word);
+        if (l > 3 && (!strcmp(word + l - 3, "ate") || !strcmp(word + l - 3, "ite"))) {
+            ite = word[l - 3] == 'i';
+            stem[l - 3] = 0;
+        } else if (l > 4 && (!strcmp(word + l - 3, "ium") || !strcmp(word + l - 3, "ine"))) {
+            stem[l - 3] = 0;
+        } else if (l > 5 && !strcmp(word + l - 4, "ogen")) stem[l - 4] = 0;
+    } else {
+        strcpy(stem, "(");
+        strcat(stem, sym);
+        strcat(stem, ")");
+    }
+    if (oxy) {
+        level = (int8_t)((int)o - ion_o - ite);
+        if (level < -2 || level > 1) return false;
+        strcpy(name, level == 1 ? "per" : level == -2 ? "hypo" : "");
+        strcat(name, stem);
+        strcat(name, level >= 0 ? "ic acid" : "ous acid");
+    } else {
+        strcpy(name, "hydro");
+        strcat(name, stem);
+        strcat(name, "ic acid");
+    }
+    if (!oxy) strcpy(row, "binary acid: hydro-ic");
+    else {
+        static const char *const rule[] = {"-2 O: hypo-ous", "-1 O: -ous",
+                                           "same O: -ic", "+1 O: per-ic"};
+        strcpy(row, ite ? "-ite, " : "-ate, ");
+        strcat(row, rule[level + 2]);
+    }
+    work_add(w, "made-up element ", sym, NULL, NULL);
+    work_name(w, name);
+    if (oxy) {
+        char t[32], *q = cpy(t, "acid O: ");
+        q = put_uint(q, o);
+        q = cpy(q, ite ? ", -ite O: " : ", -ate O: ");
+        put_uint(q, ion_o);
+        work_add(w, t, NULL, NULL, NULL);
+        work_add(w, "+1 O per-ic   same -ic", NULL, NULL, NULL);
+        work_add(w, "-1 O -ous   -2 O hypo-ous", NULL, NULL, NULL);
+    } else {
+        work_add(w, "H + nonmetal only:", NULL, NULL, NULL);
+        work_add(w, "hydro- + root + -ic acid", NULL, NULL, NULL);
+    }
+    strcpy(out, name);
+    strcat(out, "\n");
+    strcat(out, row);
+    return true;
+}
+
 void names_compute(const char *in, char *out, char *small, work_t *w) {
-    char buf[ENTRY_MAX + 1], name[48], fa[48], pretty[48];
+    char buf[ENTRY_MAX + 1], raw[ENTRY_MAX + 1], name[48], fa[48], pretty[48];
     cmpd_t c;
     formula_t f;
     uint8_t i, l = 0;
@@ -971,6 +1078,7 @@ void names_compute(const char *in, char *out, char *small, work_t *w) {
         buf[l++] = ch;
     }
     buf[l] = 0;
+    strcpy(raw, buf);
     if (name_parse(buf, &c)) {
         c.from_name = true;
         cmpd_formula(&c, fa);
@@ -996,6 +1104,7 @@ void names_compute(const char *in, char *out, char *small, work_t *w) {
 
     /* formula -> name */
     if (!formula_parse(in, (uint8_t)strlen(in), FP_COMPOUND, &f)) {
+        if (fict_acid(raw, out, w)) return;
         strcpy(out, "not recognized");
         return;
     }
