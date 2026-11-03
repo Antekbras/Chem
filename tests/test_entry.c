@@ -47,12 +47,12 @@ static const row_t rows[] = {
     {"CONVERT", "S25", "100.0g h2so4>mol", 15, 5},
     /* ATOM */
     {"ATOM", "3 D1", "fe3+", 4, 1}, {"ATOM", "3 D2", "cu2+", 4, 3},
-    {"ATOM", "3 D3", "ni2+", 4, 1}, {"ATOM", "3 D4", "cr3+", 4, 2},
+    {"ATOM", "3 D3", "ni2+", 4, 3}, {"ATOM", "3 D4", "cr3+", 4, 2},
     {"ATOM", "3 D5", "zn2+", 4, 3}, {"ATOM", "3 D6", "co3+", 4, 2},
     {"ATOM", "3 D7", "ti2+", 4, 3}, {"ATOM", "3 P", "co2+", 4, 3},
     {"ATOM", "4 D1", "cr", 2, 2}, {"ATOM", "4 D2", "cu", 2, 2},
     {"ATOM", "4 D3", "ag", 2, 1}, {"ATOM", "4 D4", "fe", 2, 1},
-    {"ATOM", "4 D5", "ni", 2, 1}, {"ATOM", "4 D6", "mn", 2, 2},
+    {"ATOM", "4 D5", "ni", 2, 2}, {"ATOM", "4 D6", "mn", 2, 2},
     {"ATOM", "4 D7", "29", 2, 1}, {"ATOM", "4 P", "mo", 2, 2},
     /* NAMES */
     {"NAMES", "5 D1", "tio2", 4, 3}, {"NAMES", "5 D2", "pbo2", 4, 3},
@@ -199,6 +199,21 @@ int main(void) {
         CHECK_STR(e.buf, "no 9xj");
         entry_key(&e, K_STO);
         CHECK(e.buf[6] == CH_STO, "sto arrow in letter-lock");
+        /* the lock changes only with the arrows: ENTER and CLEAR keep it */
+        entry_key(&e, K_ENTER); entry_done(&e);
+        CHECK(e.lock == LOCK_LET, "lock kept after ENTER");
+        entry_key(&e, K_CLEAR);
+        CHECK(e.lock == LOCK_LET, "lock kept after CLEAR");
+        entry_key(&e, K_CLEAR);
+        CHECK(e.lock == LOCK_LET, "lock kept after CLEAR on empty");
+        entry_key(&e, K_DOWN);
+        CHECK(e.lock == LOCK_NUM, "arrow toggles back");
+        /* exponents in every app: x² = ², 2nd+x² = ³, 2nd+^ = ^ (ni, I: ALPHA+x²) */
+        entry_clear(&e);
+        entry_key(&e, K_COS); entry_key(&e, K_ALPHA); entry_key(&e, K_DIV);
+        entry_key(&e, K_SQUARE); entry_key(&e, K_2ND); entry_key(&e, K_SQUARE);
+        entry_key(&e, K_2ND); entry_key(&e, K_POWER); entry_key(&e, K_2); entry_key(&e, K_POWER);
+        CHECK(!strcmp(e.buf, "fm\x12\x0E^2h"), "exponent keys in number-lock: %s", e.buf);
         /* cursor, overwrite, insert, delete */
         entry_set(&e, "kcl");
         entry_key(&e, K_LEFT); entry_key(&e, K_LEFT);

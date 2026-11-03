@@ -57,7 +57,8 @@ static char smart_char(uint8_t k) {
 }
 
 char entry_char(uint8_t k, uint8_t lock, bool alpha, bool second, uint32_t smart) {
-    if (second) return k == K_COMMA ? CH_EE : 0;
+    /* 2nd+[,] E, 2nd+[x²] ³, 2nd+[^] ^ (cm^2 where ^ types H) */
+    if (second) return k == K_COMMA ? CH_EE : k == K_SQUARE ? CH_CUBE : k == K_POWER ? '^' : 0;
     if (alpha) {
         /* one real OS letter, including those the locks don't give */
         switch (k) {
@@ -100,12 +101,11 @@ void entry_set(entry_t *e, const char *text) {
 void entry_done(entry_t *e) {
     strcpy(e->last, e->buf);
     e->done = true;
-    e->lock = e->lock_default;
     e->second = e->alpha = false;
 }
 
 static bool is_op(char c) {
-    return c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == CH_SQ || c == CH_STO;
+    return c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == CH_SQ || c == CH_CUBE || c == CH_STO;
 }
 
 static void put(entry_t *e, char c) {
@@ -203,7 +203,6 @@ uint8_t entry_key(entry_t *e, uint8_t k) {
     case K_CLEAR:
         if (!e->len) return EK_CLEAR_EMPTY;
         entry_clear(e);
-        e->lock = e->lock_default;
         return EK_CHANGED;
     case K_ENTER: return EK_ENTER;
     case K_GRAPH: return EK_GRAPH;
@@ -239,14 +238,15 @@ static uint8_t options(char c, uint8_t lock, uint32_t smart, opt_t *o) {
     return n;
 }
 
-static uint8_t plan_line(const char *s, uint8_t len, uint32_t smart, uint8_t *keys, uint8_t max, uint8_t *extra) {
+static uint8_t plan_line(const char *s, uint8_t len, uint32_t smart, uint8_t *keys, uint8_t max, uint8_t *extra,
+                         uint8_t *lk) {
     /* cost[i][lock]: min extra keys to type s[0..i) ending in lock */
     uint8_t cost[ENTRY_MAX + 1][2], from[ENTRY_MAX + 1][2], via[ENTRY_MAX + 1][2][2];
     uint8_t i, l, n = 0, lock, best;
     opt_t o[8];
     if (len > ENTRY_MAX) return 0;
     memset(cost, 0xFF, sizeof cost);
-    cost[0][LOCK_NUM] = 0;
+    cost[0][*lk] = 0;
     for (i = 0; i < len; i++) {
         for (l = 0; l < 2; l++) {
             uint8_t no, j;
@@ -266,6 +266,7 @@ static uint8_t plan_line(const char *s, uint8_t len, uint32_t smart, uint8_t *ke
     lock = cost[len][0] <= cost[len][1] ? 0 : 1;
     best = cost[len][lock];
     if (best == 0xFF) return 0;
+    *lk = lock;                        /* the lock stays as it is after ENTER */
     /* walk back */
     {
         uint8_t seq[2 * ENTRY_MAX + 2], m = 0;
@@ -286,14 +287,14 @@ static uint8_t plan_line(const char *s, uint8_t len, uint32_t smart, uint8_t *ke
 }
 
 uint8_t entry_plan(const char *text, uint32_t smart, uint8_t *keys, uint8_t max, uint8_t *extra) {
-    uint8_t total = 0;
+    uint8_t total = 0, lk = LOCK_NUM;
     const char *p = text;
     *extra = 0;
     for (;;) {
         const char *sep = strstr(p, " ; ");
         uint8_t len = (uint8_t)(sep ? (size_t)(sep - p) : strlen(p)), n;
         n = plan_line(p, len, smart, keys ? keys + total : NULL,
-                      (uint8_t)(max > total ? max - total : 0), extra);
+                      (uint8_t)(max > total ? max - total : 0), extra, &lk);
         if (!n) return 0;
         total = (uint8_t)(total + n);
         if (!sep) break;

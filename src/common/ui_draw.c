@@ -12,16 +12,31 @@
 
 /* ---- primitives ---- */
 
+#ifdef UI_COUNT
+unsigned long ui_px;               /* host profiling: pixels filled */
+#define COUNT_PX(n) (ui_px += (n))
+#else
+#define COUNT_PX(n) ((void)0)
+#endif
+
+/* the first row by hand, the others copied from it (LDIR on the eZ80);
+ * white and black are a plain memset */
 void ui_fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c) {
-    uint16_t *v = plat_vram();
-    uint16_t i, j;
-    if (x >= LCD_W || y >= LCD_H) return;
+    uint16_t *p, j;
+    size_t n;
+    if (x >= LCD_W || y >= LCD_H || !w || !h) return;
     if (x + w > LCD_W) w = (uint16_t)(LCD_W - x);
     if (y + h > LCD_H) h = (uint16_t)(LCD_H - y);
-    for (j = 0; j < h; j++) {
-        uint16_t *p = v + (uint32_t)(y + j) * LCD_W + x;
-        for (i = 0; i < w; i++) *p++ = c;
+    COUNT_PX((unsigned long)w * h);
+    p = plat_vram() + (uint32_t)y * LCD_W + x;
+    n = (size_t)w * 2;
+    if ((uint8_t)c == (uint8_t)(c >> 8)) {
+        if (w == LCD_W) { memset(p, (uint8_t)c, n * h); return; }
+        for (j = 0; j < h; j++, p += LCD_W) memset(p, (uint8_t)c, n);
+        return;
     }
+    for (j = 0; j < w; j++) p[j] = c;
+    for (j = 1; j < h; j++) memcpy(p + (uint32_t)j * LCD_W, p, n);
 }
 
 void ui_box(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c) {
@@ -52,32 +67,24 @@ void ui_panel(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
 }
 
 uint16_t ui_text_width(const char *s, uint8_t flags) {
-    uint16_t w = plat_text_width(s, (uint8_t)(flags & UI_LARGE));
-    return (uint16_t)(w + ((flags & UI_BOLD) && w ? 1 : 0));
+    return plat_text_width(s, (uint8_t)(flags & (UI_LARGE | UI_BOLD)));
 }
 
 uint8_t ui_text_height(uint8_t flags) { return plat_text_height((uint8_t)(flags & UI_LARGE)); }
 
 uint16_t ui_text(const char *s, uint16_t x, uint8_t y, uint8_t flags, uint16_t fg, uint16_t bg) {
-    uint8_t f = (uint8_t)(flags & (UI_LARGE | UI_TRANS));
-    uint16_t w;
     if (!s[0]) return 0;
-    if (flags & UI_BOLD) {
-        if (!(flags & UI_TRANS)) ui_fill(x, y, ui_text_width(s, flags), ui_text_height(flags), bg);
-        plat_text(s, x, y, (uint8_t)(f | PLAT_TRANS), fg, bg);
-        w = plat_text(s, (uint16_t)(x + 1), y, (uint8_t)(f | PLAT_TRANS), fg, bg);
-        return (uint16_t)(w + 1);
-    }
-    return plat_text(s, x, y, f, fg, bg);
+    return plat_text(s, x, y, (uint8_t)(flags & (UI_LARGE | UI_TRANS | UI_BOLD)), fg, bg);
 }
 
 /* the longest prefix of s (at most n chars) that fits in maxw pixels */
 static uint8_t fit(const char *s, uint8_t n, uint8_t flags, uint16_t maxw, char *buf) {
-    uint8_t k = 0;
+    uint8_t k = 0, f = (uint8_t)(flags & (UI_LARGE | UI_BOLD));
+    uint16_t w = 0;
     while (k < n && s[k]) {
+        w = (uint16_t)(w + plat_char_width(s[k], f));
+        if (w > maxw) break;
         buf[k] = s[k];
-        buf[k + 1] = 0;
-        if (ui_text_width(buf, flags) > maxw) break;
         k++;
     }
     buf[k] = 0;
@@ -171,12 +178,12 @@ void ui_tabs(const char *const l[5], uint8_t sel) {
 
 /* ---- main screen ---- */
 
-static bool dirty_frame = true, dirty_list = true;
+static bool dirty_frame = true, dirty_list = true, dirty_box = true;
 static uint16_t list_sum;
 static uint8_t view_start;                 /* first input char shown */
 static uint16_t caret_x, caret_w;          /* caret box, for blinking */
 
-void ui_invalidate(void) { dirty_frame = dirty_list = true; }
+void ui_invalidate(void) { dirty_frame = dirty_list = dirty_box = true; }
 
 /* a whole frame for an app's own screen (table, forms): title bar with
  * `title` and `view`, white body, tab bar. The home screen's own heading
@@ -211,43 +218,58 @@ char ui_cursor_glyph(const entry_t *e) {
     return '1';
 }
 
+/* what the input box shows now, so a key redraws only what changed */
+static char box_text[ENTRY_MAX + 1];
+static char box_badge;
+
 static void draw_box(const entry_t *e) {
     char buf[ENTRY_MAX + 1], g[2];
-    uint8_t k, n;
-    uint16_t w;
-    /* keep the cursor in view */
+    uint8_t n, p;
+    uint16_t w, x;
+    /* keep the cursor in view: the text up to and under the cursor must fit */
     if (e->cur < view_start) view_start = e->cur;
     if (view_start > e->len) view_start = 0;
-    for (;;) {
-        n = (uint8_t)(e->cur - view_start + (e->cur < e->len ? 1 : 0));
-        memcpy(buf, e->buf + view_start, n);
-        buf[n] = 0;
-        w = ui_text_width(buf, UI_LARGE) + (e->cur < e->len ? 0 : 8);
-        if (w <= TEXT_W || view_start >= e->cur) break;
-        view_start++;
+    n = (uint8_t)(e->cur + (e->cur < e->len ? 1 : 0));
+    for (w = (e->cur < e->len ? 0 : 8), p = view_start; p < n; p++)
+        w = (uint16_t)(w + plat_char_width(e->buf[p], PLAT_LARGE));
+    while (w > TEXT_W && view_start < e->cur)
+        w = (uint16_t)(w - plat_char_width(e->buf[view_start++], PLAT_LARGE));
+    fit(e->buf + view_start, (uint8_t)(e->len - view_start), UI_LARGE, TEXT_W, buf);
+    if (dirty_box) {
+        ui_box(BOX_X, BOX_Y, BOX_W, BOX_H, C_BORDER);
+        ui_fill(BOX_X + 1, BOX_Y + 1, BOX_W - 2, (uint16_t)(BOX_H - 2), C_WHITE);
+        box_text[0] = 0;
+        box_badge = 0;
+        p = 0;
+    } else {
+        /* keep the characters both lines share, redraw from the first change */
+        for (p = 0; buf[p] && buf[p] == box_text[p]; p++) ;
+        if (!buf[p] && !box_text[p]) p = 0xFF;      /* same text */
     }
-    ui_box(BOX_X, BOX_Y, BOX_W, BOX_H, C_BORDER);
-    ui_fill(BOX_X + 1, BOX_Y + 1, BOX_W - 2, (uint16_t)(BOX_H - 2), C_WHITE);
-    k = fit(e->buf + view_start, (uint8_t)(e->len - view_start), UI_LARGE, TEXT_W, buf);
-    (void)k;
-    ui_text(buf, TEXT_X, BOX_Y + 3, UI_LARGE, C_BLACK, C_WHITE);
+    if (p != 0xFF) {
+        for (x = TEXT_X, n = 0; n < p; n++) x = (uint16_t)(x + plat_char_width(buf[n], PLAT_LARGE));
+        if (!dirty_box) ui_fill(x, BOX_Y + 1, (uint16_t)(BADGE_X - 1 - x), (uint16_t)(BOX_H - 2), C_WHITE);
+        ui_text(buf + p, x, BOX_Y + 3, UI_LARGE, C_BLACK, C_WHITE);
+        strcpy(box_text, buf);
+    }
     /* caret box: the character under the cursor (overwrite) or a bar (insert) */
-    n = (uint8_t)(e->cur - view_start);
-    memcpy(buf, e->buf + view_start, n);
-    buf[n] = 0;
-    caret_x = (uint16_t)(TEXT_X + ui_text_width(buf, UI_LARGE));
+    for (caret_x = TEXT_X, n = view_start; n < e->cur; n++)
+        caret_x = (uint16_t)(caret_x + plat_char_width(e->buf[n], PLAT_LARGE));
     if (e->ins) caret_w = 2;
     else if (e->cur < e->len) {
-        g[0] = e->buf[e->cur]; g[1] = 0;
-        caret_w = ui_text_width(g, UI_LARGE);
+        caret_w = plat_char_width(e->buf[e->cur], PLAT_LARGE);
         if (!caret_w) caret_w = 8;
     } else caret_w = 8;
     if (caret_x + caret_w > BADGE_X - 2) caret_w = (uint16_t)(BADGE_X - 2 > caret_x ? BADGE_X - 2 - caret_x : 1);
     /* mode badge */
     g[0] = ui_cursor_glyph(e); g[1] = 0;
-    ui_fill(BADGE_X, BOX_Y + 2, BADGE_W, (uint16_t)(BOX_H - 4), C_NAVY);
-    w = ui_text_width(g, UI_LARGE);
-    ui_text(g, (uint16_t)(BADGE_X + (BADGE_W - w) / 2), BOX_Y + 3, UI_LARGE, C_WHITE, C_NAVY);
+    if (g[0] != box_badge) {
+        ui_fill(BADGE_X, BOX_Y + 2, BADGE_W, (uint16_t)(BOX_H - 4), C_NAVY);
+        w = ui_text_width(g, UI_LARGE);
+        ui_text(g, (uint16_t)(BADGE_X + (BADGE_W - w) / 2), BOX_Y + 3, UI_LARGE, C_WHITE, C_NAVY);
+        box_badge = g[0];
+    }
+    dirty_box = false;
 }
 
 static void caret(void) {
@@ -372,31 +394,36 @@ uint8_t ui_getkey(const screen_t *s, const entry_t *e, uint8_t rows) {
 /* ---- pages ---- */
 
 static bool dark(uint16_t c) {
-    /* BGR565: r = low 5 bits, g = middle 6, b = high 5 */
-    uint16_t r = (uint16_t)((c & 31) << 3), g = (uint16_t)(((c >> 5) & 63) << 2), b = (uint16_t)((c >> 11) << 3);
+    /* RGB565: r = high 5 bits, g = middle 6, b = low 5 */
+    uint16_t b = (uint16_t)((c & 31) << 3), g = (uint16_t)(((c >> 5) & 63) << 2), r = (uint16_t)((c >> 11) << 3);
     return r * 3 + g * 6 + b < 128 * 10;
+}
+
+static void page_dots(uint8_t page, uint8_t npages, uint16_t fg, uint16_t color) {
+    uint8_t i;
+    if (npages < 2) return;
+    if (npages > 8) npages = 8;
+    for (i = 0; i < npages; i++) {
+        uint16_t x = (uint16_t)(314 - (npages - i) * 6);
+        ui_fill(x, 26, 4, 4, i == page ? fg : color);
+        ui_box(x, 26, 4, 4, fg);
+    }
 }
 
 void ui_page(const char *name, const char *sub, uint16_t color, uint8_t page, uint8_t npages) {
     uint16_t fg = dark(color) ? C_WHITE : C_BLACK;
-    uint8_t i;
     ui_fill(0, 0, LCD_W, 34, color);
     text_clip(name, 40, 6, 2, UI_LARGE | UI_BOLD, fg, color, 300);
     if (sub && sub[0]) text_clip(sub, 60, 6, (uint8_t)(4 + LH), 0, fg, color, 260);
-    if (npages > 1) {
-        if (npages > 8) npages = 8;
-        for (i = 0; i < npages; i++) {
-            uint16_t x = (uint16_t)(314 - (npages - i) * 6);
-            if (i == page) ui_fill(x, 26, 4, 4, fg);
-            else ui_box(x, 26, 4, 4, fg);
-        }
-    }
+    page_dots(page, npages, fg, color);
     ui_fill(0, 34, LCD_W, 1, C_BORDER);
     ui_fill(0, 35, LCD_W, LCD_H - 35, C_WHITE);
 }
 
-void ui_row(uint8_t i, const char *label, const char *value) {
-    uint16_t y = (uint16_t)(39 + i * 21), bg = (i & 1) ? C_BAND : C_WHITE;
+#define ROW_Y(i) ((uint16_t)(39 + (i) * 21))
+
+static void row_draw(uint8_t i, bool band, const char *label, const char *value) {
+    uint16_t y = ROW_Y(i), bg = band ? C_BAND : C_WHITE;
     if (y + 21 > LCD_H) return;
     ui_fill(0, y, LCD_W, 21, bg);
     if (label) {
@@ -407,24 +434,39 @@ void ui_row(uint8_t i, const char *label, const char *value) {
     }
 }
 
+void ui_row(uint8_t i, const char *label, const char *value) { row_draw(i, i & 1, label, value); }
+
+/* show-work rows are banded by line number, so scrolling can move pixels */
+static void work_row(const work_t *w, uint8_t i, uint8_t top) {
+    uint8_t j = (uint8_t)(top + i);
+    row_draw(i, j & 1, NULL, j < w->n ? w->line[j] : "");
+}
+
+#define WORK_SUB "Show work - arrows scroll, CLEAR back"
+#define WORK_PAGE(top) ((uint8_t)(((top) + UI_PAGE_ROWS / 2) / UI_PAGE_ROWS))
+#define WORK_PAGES(w) ((uint8_t)(((w)->n + UI_PAGE_ROWS - 1) / UI_PAGE_ROWS))
+
 void ui_work_page(const char *title, const work_t *w, uint8_t top) {
-    uint8_t i, np = (uint8_t)((w->n + UI_PAGE_ROWS - 1) / UI_PAGE_ROWS);
+    uint8_t i;
     LH = plat_text_height(PLAT_LARGE);
     SH = plat_text_height(0);
-    ui_page(title, "Show work - arrows scroll, CLEAR back", C_NAVY,
-            (uint8_t)((top + UI_PAGE_ROWS / 2) / UI_PAGE_ROWS), np);
-    for (i = 0; i < UI_PAGE_ROWS; i++) {
-        uint8_t j = (uint8_t)(top + i);
-        ui_row(i, NULL, j < w->n ? w->line[j] : "");
-    }
+    ui_page(title, WORK_SUB, C_NAVY, WORK_PAGE(top), WORK_PAGES(w));
+    for (i = 0; i < UI_PAGE_ROWS; i++) work_row(w, i, top);
+}
+
+/* move rows [from, from+n) to start at row `to` (VRAM copy, no text drawn) */
+static void move_rows(uint8_t to, uint8_t from, uint8_t n) {
+    uint16_t *v = plat_vram();
+    memmove(v + (uint32_t)ROW_Y(to) * LCD_W, v + (uint32_t)ROW_Y(from) * LCD_W, (size_t)n * 21 * LCD_W * 2);
 }
 
 uint8_t ui_show_work(const char *title, const work_t *w) {
-    uint8_t top = 0, k;
+    uint8_t top = 0, old, i, k;
     ui_invalidate();
+    ui_work_page(title, w, top);
     for (;;) {
-        ui_work_page(title, w, top);
         while (!(k = plat_getcsc())) ;
+        old = top;
         if (k == K_UP) { if (top) top--; }
         else if (k == K_DOWN) { if (top + UI_PAGE_ROWS < w->n) top++; }
         else if (k == K_LEFT) top = (uint8_t)(top > UI_PAGE_ROWS ? top - UI_PAGE_ROWS : 0);
@@ -435,10 +477,23 @@ uint8_t ui_show_work(const char *title, const work_t *w) {
             }
         }
         else return k;
+        if (top == old) continue;
+        if (top == old + 1) {                  /* one line down: shift up, draw the new last row */
+            move_rows(0, 1, UI_PAGE_ROWS - 1);
+            work_row(w, UI_PAGE_ROWS - 1, top);
+        } else if (top + 1 == old) {           /* one line up */
+            move_rows(1, 0, UI_PAGE_ROWS - 1);
+            work_row(w, 0, top);
+        } else {
+            for (i = 0; i < UI_PAGE_ROWS; i++) work_row(w, i, top);
+        }
+        if (WORK_PAGE(top) != WORK_PAGE(old)) page_dots(WORK_PAGE(top), WORK_PAGES(w), C_WHITE, C_NAVY);
     }
 }
 
 /* ---- popups ---- */
+
+bool ui_full_redraw;                       /* tests: redraw every row on every key */
 
 static uint8_t digit(uint8_t k) {
     static const uint8_t dig[10] = {K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9, K_0};
@@ -487,37 +542,44 @@ uint8_t ui_pick_at(const char *title, const char *const *items, uint8_t n, uint8
             ui_text("CLEAR: cancel", (uint16_t)(x0 + w - 6 - cw), (uint8_t)(y0 + 4), 0, C_WHITE, C_NAVY);
         }
     }
-    for (;;) {
+    {
         uint16_t ys = menu ? (uint16_t)(y0 + 1) : (uint16_t)(y0 + 26);
-        if (sel < top) top = sel;
-        if (sel >= top + vis) top = (uint8_t)(sel - vis + 1);
-        for (i = 0; i < vis; i++) {
-            uint8_t j = (uint8_t)(top + i);
-            uint16_t y = (uint16_t)(ys + i * rh);
-            uint16_t bg = j == sel ? (menu ? C_SLATE : C_SELECT) : C_WHITE;
-            uint16_t fg = (j == sel && menu) ? C_WHITE : C_BLACK;
-            ui_fill((uint16_t)(x0 + 1), y, (uint16_t)(w - (menu ? 2 : 8)), rh, bg);
-            if (j < n) {
-                label(row, j, items[j]);
-                text_clip(row, 42, (uint16_t)(x0 + 6), (uint8_t)(y + (rh - (menu ? SH : LH)) / 2),
-                          menu ? 0 : UI_LARGE, fg, bg, (uint16_t)(w - 16));
+        uint8_t shown_top = 0xFF, shown_sel = 0xFF;
+        for (;;) {
+            if (sel < top) top = sel;
+            if (sel >= top + vis) top = (uint8_t)(sel - vis + 1);
+            for (i = 0; i < vis; i++) {
+                uint8_t j = (uint8_t)(top + i);
+                uint16_t y = (uint16_t)(ys + i * rh);
+                uint16_t bg = j == sel ? (menu ? C_SLATE : C_SELECT) : C_WHITE;
+                uint16_t fg = (j == sel && menu) ? C_WHITE : C_BLACK;
+                /* same rows in view: only the old and the new highlight change */
+                if (!ui_full_redraw && top == shown_top && j != sel && j != shown_sel) continue;
+                ui_fill((uint16_t)(x0 + 1), y, (uint16_t)(w - (menu ? 2 : 8)), rh, bg);
+                if (j < n) {
+                    label(row, j, items[j]);
+                    text_clip(row, 42, (uint16_t)(x0 + 6), (uint8_t)(y + (rh - (menu ? SH : LH)) / 2),
+                              menu ? 0 : UI_LARGE, fg, bg, (uint16_t)(w - 16));
+                }
             }
-        }
-        if (!menu && n > vis) {            /* scrollbar */
-            uint16_t bh = (uint16_t)(vis * rh), th = (uint16_t)(bh * vis / n), ty;
-            if (th < 6) th = 6;
-            ty = (uint16_t)(ys + (bh - th) * top / (n - vis));
-            ui_fill((uint16_t)(x0 + w - 6), ys, 4, bh, C_BAND);
-            ui_fill((uint16_t)(x0 + w - 6), ty, 4, th, C_SHADOW);
-        }
-        while (!(k = plat_getcsc())) ;
-        if (k == K_UP) sel = sel ? (uint8_t)(sel - 1) : (uint8_t)(n - 1);
-        else if (k == K_DOWN) sel = (uint8_t)(sel + 1 < n ? sel + 1 : 0);
-        else if (k == K_ENTER) { ui_invalidate(); return sel; }
-        else {
-            uint8_t d = digit(k);
-            ui_invalidate();
-            return d < n ? d : 0xFF;
+            if (!menu && n > vis && (ui_full_redraw || top != shown_top)) {    /* scrollbar */
+                uint16_t bh = (uint16_t)(vis * rh), th = (uint16_t)(bh * vis / n), ty;
+                if (th < 6) th = 6;
+                ty = (uint16_t)(ys + (bh - th) * top / (n - vis));
+                ui_fill((uint16_t)(x0 + w - 6), ys, 4, bh, C_BAND);
+                ui_fill((uint16_t)(x0 + w - 6), ty, 4, th, C_SHADOW);
+            }
+            shown_top = top;
+            shown_sel = sel;
+            while (!(k = plat_getcsc())) ;
+            if (k == K_UP) sel = sel ? (uint8_t)(sel - 1) : (uint8_t)(n - 1);
+            else if (k == K_DOWN) sel = (uint8_t)(sel + 1 < n ? sel + 1 : 0);
+            else if (k == K_ENTER) { ui_invalidate(); return sel; }
+            else {
+                uint8_t d = digit(k);
+                ui_invalidate();
+                return d < n ? d : 0xFF;
+            }
         }
     }
 }
