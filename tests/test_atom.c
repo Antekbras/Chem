@@ -104,6 +104,41 @@ int main(void) {
     CHECK(work_has("Most stable: Og-294"), "og isotope");
     run("tc");
     CHECK(work_has("Mass [98]"), "tc mass");
+    /* INFO pages 3 and 4 stay on screen for every element, old and new fonts:
+     * no text above the body or past the bottom, Lewis rows in order */
+    {
+        static const mock_os_t fonts[2] = {{16, 12}, {15, 13}};
+        mock_os_t keep = mock_os;
+        for (uint8_t f = 0; f < 2; f++) {
+            mock_os = fonts[f];
+            for (uint8_t z = 1; z <= NUM_ELEMENTS; z++) {
+                uint8_t k;
+                Z = z;
+                econfig(z, 0, &ec);
+                for (on = 0, k = 0; k < NUM_SUBSHELLS; k++) if (ec.occ[k] && sub_n[k] > on) on = sub_n[k];
+                oe = shell_e(on);
+                for (uint8_t pg = 2; pg <= 3; pg++) {
+                    int last = 0, i;
+                    bool seen = false;
+                    mock_log_clear();
+                    if (pg == 2) page_config(); else page_lewis();
+                    for (i = 0; i < mock_nlog; i++) {
+                        const mock_text_t *t = &mock_log[i];
+                        uint8_t h = (t->flags & PLAT_LARGE) ? mock_os.lh : mock_os.sh;
+                        CHECK(t->y >= 35 && t->y + h <= LCD_H, "z %u page %u: \"%s\" at y %u", z, pg + 1, t->s, t->y);
+                        if (pg == 2 && t->y < 170) CHECK(t->y + h <= 170, "z %u config into band: %s", z, t->s);
+                        if (pg == 3 && t->x >= 138) {
+                            CHECK(t->y + 3 >= last, "z %u lewis row order: %s", z, t->s);
+                            last = t->y;
+                            if (strstr(t->s, "magnetic")) seen = true;
+                        }
+                    }
+                    if (pg == 3) CHECK(seen, "z %u: unpaired row drawn (font %u)", z, f);
+                }
+            }
+        }
+        mock_os = keep;
+    }
     /* strongest ionic bond: charge first, then the smaller ion */
     want("na+ mg2+ sr2+ rb+", "Mg2+ > Sr2+ > Na+ > Rb+", "Mg2+ strongest");
     CHECK(work_has("Strongest bond: Mg2+"), "rank head");
