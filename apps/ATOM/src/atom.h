@@ -13,13 +13,15 @@ extern const uint16_t rad_cov[NUM_ELEMENTS + 1];
 extern const uint32_t mass_iupac[NUM_ELEMENTS + 1];
 extern const uint8_t iso_n[NUM_ELEMENTS + 1];
 extern const uint8_t state_bits[30];
+typedef struct { uint8_t z; int8_t q; uint16_t r2; } ion_r_t;   /* r2 = radius x2, pm */
+extern const ion_r_t ion_radii[];
+extern const uint8_t ion_radii_n;
 
 /* ---- saved with the app (appvar ATOMxs) ---- */
 #define ISO_ROWS 5
 #define ISO_LEN 10
 typedef struct {
     uint8_t c_sel;                     /* speed of light choice 0..2 */
-    uint8_t view, tz;                  /* table view and selected Z */
     uint8_t tab;                       /* orbital reference tab */
     uint8_t irow, icol;                /* isotope form cursor */
     uint8_t info_z;                    /* element of the last answer, 0 = none */
@@ -50,6 +52,15 @@ void card(uint8_t z, int8_t charge, work_t *w);
 /* isotope "cl37" / "37cl": out "17p 20n 17e" */
 void isotope_card(uint8_t z, uint16_t a, int8_t charge, char *out, char *small, work_t *w);
 
+/* "fe", "Fe3+", "iron": Z (0 = none) and the charge */
+uint8_t element_of(const char *s, uint8_t len, int8_t *charge);
+
+/* ---- rank.c: ions by bond strength ---- */
+uint16_t ion_r2(uint8_t z, int8_t q);  /* ionic radius x2 (pm), 0 = no data */
+char *put_r2(char *p, uint16_t r2);    /* "72" or "64.5" */
+/* "na+ mg2+ sr2+ rb+ [cl-]": strongest ionic bond first; true if handled */
+bool ion_rank(const char *in, char *out, char *small, work_t *w);
+
 /* ---- light.c ---- */
 extern const char *const c_text[3];
 /* "12nm", "12nm>j", "5.0E14hz>nm", "3.0E-19j>nm", "green": true if handled */
@@ -62,10 +73,6 @@ void iso_form(void);
 /* how the element gets a noble-gas configuration; '^' marks raised text */
 const char *ion_rule_text(uint8_t z, char *buf);
 
-/* ---- table.c: periodic table, OPTIONS, LIST / Find ---- */
-void table_view(void);
-extern const uint16_t fam_strong[10];   /* family colors: INFO header, chips */
-char *el_name(char *d, uint8_t z);      /* "Iron" */
 
 /* ---- info.c: the 4 INFO pages; true = ENTER put it on the line ---- */
 bool info_pages(uint8_t z);
@@ -73,7 +80,6 @@ bool info_pages(uint8_t z);
 /* ---- orbital.c ---- */
 void orbital_ref(void);
 
-/* ---- table.c ---- */
 uint8_t wait_key(void);
 
 #endif

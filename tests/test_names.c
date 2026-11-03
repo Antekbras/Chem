@@ -120,6 +120,18 @@ int main(void) {
     nm("hg22+", "mercury(I) ion", NULL);
     nm("tin", "Sn", NULL);
     nm("xyz", "not recognized", NULL);
+    /* acids of made-up elements (Day 1 Q17-18) */
+    nm("h2zp zephron", "hydrozephronic acid", "binary acid: hydro-ic");
+    nm("h2zp", "hydro(Zp)ic acid", NULL);
+    nm("h3mvo3 morvate mvo4", "morvous acid", "-ate, -1 O: -ous");
+    nm("h3mvo3 mvo4 morvate", "morvous acid", NULL);
+    nm("h3mvo4 morvate mvo4", "morvic acid", NULL);
+    nm("h3mvo5 morvate mvo4", "permorvic acid", NULL);
+    nm("h3mvo2 morvate mvo43-", "hypomorvous acid", NULL);
+    nm("h3mvo3 morvite mvo3", "morvous acid", NULL);
+    nm("h3mvo4 morvite mvo3", "morvic acid", NULL);
+    nm("h3mvo3 mvo4", "(Mv)ous acid", NULL);
+    nm("h3mvo3", "add the -ate ion", NULL);
     nm("h+", "hydrogen ion", NULL);
     nm("hydrogen ion", "H+", NULL);
     nm("iron(ii) ion", "Fe2+", NULL);
@@ -143,6 +155,22 @@ int main(void) {
             names_compute(in, out, small, &w);
             CHECK(strncmp(out, "not", 3), "ion name %s", in);
         }
+    }
+    /* OPTIONS / LIST rows: each one looks up to an answer */
+    {
+        static char sh[64][NL_COLS], en[64][NL_COLS];
+        uint8_t kind;
+        for (kind = 0; kind < 4; kind++) {
+            uint8_t i, n = names_list(kind, sh, en, 64);
+            CHECK(n > 10, "list %d has %d rows", kind, n);
+            for (i = 0; i < n; i++) {
+                char out[UI_OUT], small[UI_SMALL];
+                work_t w;
+                names_compute(en[i], out, small, &w);
+                CHECK(strncmp(out, "not", 3) && strncmp(out, "no ", 3), "list %d row %s", kind, en[i]);
+            }
+        }
+        CHECK(names_list(NL_IONS, sh, en, 64) == 48, "48 ions");
     }
     TEST_END();
 }

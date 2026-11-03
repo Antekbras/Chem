@@ -7,8 +7,10 @@
  *   2nd+[,]     E exponent              2nd+[(-)]  Ans      2nd+ENTER  last entry
  *   [,]         space in either lock;   [0] is space in letter-lock
  *   3 9 + .     same in either lock
- *   smart lock: in number-lock MATH APPS PRGM x⁻¹ SIN COS TAN ^ x² LOG LN
- *               type A B C D E F G H I N S (per-app mask)
+ *   smart lock: in number-lock MATH APPS PRGM x⁻¹ SIN COS TAN ^ LOG LN
+ *               type A B C D E F G H N S (SIGFIG keeps ^ as power)
+ *   exponents:  x² = ², 2nd+x² = ³, 2nd+^ = ^ (cm², cm³, cm^2)
+ *   The lock changes only with ▲/▼: ENTER and CLEAR keep it.
  *   ENTER computes; the line stays editable. After ENTER a typed character
  *   starts a new line; an operator (+ - × ÷ ^ ² →) starts it with "Ans".
  * Letters are stored lowercase; apps auto-case when they parse. */
@@ -25,11 +27,12 @@ enum { LOCK_NUM = 0, LOCK_LET = 1 };
 
 /* smart-lock masks: bit (letter - 'a') */
 #define SMART_BIT(c) (1UL << ((c) - 'a'))
+/* x² is always ² (cm², 2nd+x² = ³); I is letter-lock or ALPHA+x² */
 #define SMART_ALL  (SMART_BIT('a') | SMART_BIT('b') | SMART_BIT('c') | SMART_BIT('d') | \
                     SMART_BIT('e') | SMART_BIT('f') | SMART_BIT('g') | SMART_BIT('h') | \
-                    SMART_BIT('i') | SMART_BIT('n') | SMART_BIT('s'))
-/* calculator apps keep ^ and x² as math keys */
-#define SMART_CALC (SMART_ALL & ~(SMART_BIT('h') | SMART_BIT('i')))
+                    SMART_BIT('n') | SMART_BIT('s'))
+/* calculator apps keep ^ as the power key too */
+#define SMART_CALC (SMART_ALL & ~SMART_BIT('h'))
 #define SMART_NONE 0UL
 
 /* entry_key() results */
@@ -75,7 +78,7 @@ char entry_char(uint8_t key, uint8_t lock, bool alpha, bool second, uint32_t sma
 /* ---- key-count planner (tests and the final key-count pass) ----
  * Plans the shortest key sequence that types `text` into an empty line
  * starting in number-lock. Lines separated by " ; " are entered one after
- * another, each ended by ENTER. Returns the number of keys, writes them to
+ * another, each ended by ENTER (the lock carries over: only ▲/▼ change it). Returns the number of keys, writes them to
  * keys[] (if not NULL). *extra receives the keys that are not data
  * (ENTER, →, lock toggles, 2nd, ALPHA). Returns 0 if not typeable. */
 uint8_t entry_plan(const char *text, uint32_t smart, uint8_t *keys, uint8_t max, uint8_t *extra);

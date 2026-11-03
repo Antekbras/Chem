@@ -37,8 +37,10 @@ void plat_home_put(uint8_t row, uint8_t col, const char *s) {
 
 static uint8_t glyph_w(char ch, uint8_t flags) {
     unsigned c = (unsigned char)ch;
-    return (uint8_t)((flags & PLAT_LARGE) ? 6 + c % 5 : 4 + c % 3);
+    return (uint8_t)(((flags & PLAT_LARGE) ? 6 + c % 5 : 4 + c % 3) + ((flags & PLAT_BOLD) ? 1 : 0));
 }
+
+uint8_t plat_char_width(char c, uint8_t flags) { return glyph_w(c, flags); }
 
 uint16_t plat_text_width(const char *s, uint8_t flags) {
     uint16_t w = 0;
@@ -66,7 +68,7 @@ uint16_t plat_text(const char *s, uint16_t x, uint8_t y, uint8_t flags, uint16_t
         for (j = 0; j < h; j++)
             for (i = 0; i < w; i++) {
                 bool ink = i < w - 1 && j > 0 && j < h - 1 &&
-                           hash((unsigned char)*s + (flags & PLAT_LARGE ? 0u : 300u), (unsigned)i, (unsigned)j) % 3 == 0;
+                           hash((unsigned char)*s + (flags & PLAT_LARGE ? 0u : 300u) + (flags & PLAT_BOLD ? 600u : 0u), (unsigned)i, (unsigned)j) % 3 == 0;
                 if (ink) px(x + i, y + j, fg);
                 else if (!(flags & PLAT_TRANS)) px(x + i, y + j, bg);
             }

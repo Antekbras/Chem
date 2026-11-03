@@ -120,10 +120,10 @@ static bool power(ep_t *e, qty_t *q) {
     if (!primary(e, q)) return false;
     for (;;) {
         skip(e);
-        if (*e->p == CH_SQ) {
+        if (*e->p == CH_SQ || *e->p == CH_CUBE) {
             qty_t two;
+            two.n = num_exact(*e->p == CH_SQ ? 2 : 3); memset(&two.u, 0, sizeof two.u);
             e->p++;
-            two.n = num_exact(2); memset(&two.u, 0, sizeof two.u);
             if (!combine(e, q, '^', &two)) return false;
         } else if (*e->p == '^') {
             qty_t b;
@@ -179,7 +179,7 @@ static bool expr(ep_t *e, qty_t *q) {
 
 bool expr_starts_with_op(const char *s) {
     while (*s == ' ') s++;
-    return *s == '+' || *s == '-' || *s == '*' || *s == '/' || *s == '^' || *s == CH_SQ;
+    return *s == '+' || *s == '-' || *s == '*' || *s == '/' || *s == '^' || *s == CH_SQ || *s == CH_CUBE;
 }
 
 bool expr_eval(const char *s, expr_ctx_t *c, qty_t *out) {
@@ -196,10 +196,10 @@ bool expr_eval(const char *s, expr_ctx_t *c, qty_t *out) {
         char op = *e.p;
         if (!c->has_ans) return fail(&e, EXPR_SYNTAX);
         q = c->ans;
-        if (op == CH_SQ) {
+        if (op == CH_SQ || op == CH_CUBE) {
             qty_t two;
             e.p++;
-            two.n = num_exact(2); memset(&two.u, 0, sizeof two.u);
+            two.n = num_exact(op == CH_SQ ? 2 : 3); memset(&two.u, 0, sizeof two.u);
             if (!combine(&e, &q, '^', &two)) return false;
         } else {
             qty_t b;

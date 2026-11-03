@@ -250,6 +250,10 @@ void card(uint8_t z, int8_t charge, work_t *w) {
     econfig(z, charge, &c);
     if (charge) {
         wf(w, "%S%q %u e-", z, charge, c.electrons);
+        if (ion_r2(z, charge)) {
+            fmt(put_r2(fmt(full, "Ionic radius "), ion_r2(z, charge)), " pm");
+            work_add(w, full, NULL, NULL, NULL);
+        }
     } else {
         uint16_t en = elements[z].en100;
         wf(w, "%u %S %s", z, z, elements[z].name);
@@ -267,7 +271,7 @@ void card(uint8_t z, int8_t charge, work_t *w) {
         if (rad_emp[z]) p = fmt(p, "r %upm ", rad_emp[z]);
         if (rad_cov[z]) fmt(p, "cov.r %upm", rad_cov[z]);
         if (full[0]) work_add(w, full, NULL, NULL, NULL);
-        wf(w, "Most %s: %S-%u", z == 43 || z == 61 || z >= 84 ? "stable" : "common", z, z + iso_n[z]);
+        wf(w, "Most %s: %S-%u", z == 43 || z == 61 || (z >= 84 && z <= 89) || z >= 93 ? "stable" : "common", z, z + iso_n[z]);
         wf(w, "  %up %un %ue", z, iso_n[z], z);
     }
     econfig_str(&c, true, full);

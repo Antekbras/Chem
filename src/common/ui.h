@@ -55,17 +55,17 @@ uint8_t ui_max_scroll(const screen_t *s, const entry_t *e, uint8_t rows);
 
 /* ---- drawing (ui_draw.c over plat.h): PTABLE v2 style, plan/UI_STYLE.md ---- */
 
-/* colors, BGR565 as the CE OS sets the LCD */
-#ifndef RGB
-#define RGB(r, g, b) (uint16_t)((((b) >> 3) << 11) | (((g) >> 2) << 5) | ((r) >> 3))
-#endif
+/* colors: RGB565 (red in the high bits). Photos of the real LCD showed the
+ * earlier BGR order swapping blue and orange. */
+#undef RGB
+#define RGB(r, g, b) (uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3))
 #define C_BLACK  0x0000
 #define C_WHITE  0xFFFF
 #define C_SLATE  RGB(106, 121, 139)   /* title bar, selected menu row */
 #define C_NAVY   RGB(49, 56, 74)      /* popup / page headers, mode badge */
 #define C_BORDER RGB(82, 80, 82)
 #define C_SHADOW RGB(123, 121, 123)
-#define C_BAND   RGB(246, 242, 246)   /* alternate rows */
+#define C_BAND   RGB(235, 243, 255)   /* alternate rows (PTABLE light blue) */
 #define C_SELECT RGB(205, 226, 255)   /* current answer, selected list row */
 #define C_GREY   RGB(110, 110, 110)   /* hints, labels */
 
@@ -127,6 +127,8 @@ uint8_t ui_show_work(const char *title, const work_t *w);
 /* popup list like PTABLE's OPTIONS (or Find for long lists): ▲▼ move,
  * ENTER or 1-9/0 picks, CLEAR cancels. Returns the index or 0xFF. */
 uint8_t ui_pick(const char *title, const char *const *items, uint8_t n);
+/* host tests: popups redraw every row instead of only what changed */
+extern bool ui_full_redraw;
 uint8_t ui_pick_at(const char *title, const char *const *items, uint8_t n, uint8_t sel);
 
 /* legacy grid (old home-screen cells), kept so older app code builds */
