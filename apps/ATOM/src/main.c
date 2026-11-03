@@ -3,6 +3,7 @@
  *   fe3+  cu2+           ion config; small text = d electrons
  *   cl37  37cl  c-14     isotope: protons, neutrons, electrons
  *   12nm  12nm→hz  5.0E14hz→nm  3.6E-19j→nm  green
+ *   na+ mg2+ sr2+ rb+    strongest ionic bond first (charge, then size)
  * Tabs: [Y=]/[WINDOW] OPTIONS (1 isotope form, 2 orbital reference,
  * 3 light and c), [ZOOM] ISO = isotope form (average atomic mass, blank =
  * solve), [TRACE] INFO, [GRAPH] QUIT. No periodic table: PTABLE does that. */
@@ -27,7 +28,7 @@ static uint16_t read_u(const char *s, uint8_t *len) {
 }
 
 /* one element, optionally with a charge: "fe", "Fe3+", "iron" */
-static uint8_t element_of(const char *s, uint8_t len, int8_t *charge) {
+uint8_t element_of(const char *s, uint8_t len, int8_t *charge) {
     formula_t f;
     uint8_t z = elem_find_name(s, len);
     *charge = 0;
@@ -59,6 +60,7 @@ static void compute(const char *in, char *out, char *small, work_t *w) {
     int8_t q = 0;
     ast.info_z = 0;
     if (light(in, out, small, w)) return;
+    if (ion_rank(in, out, small, w)) return;              /* na+ mg2+ sr2+ */
     if (digit(in[0])) {
         uint16_t v = read_u(in, &n);
         if (n == len) {                                   /* atomic number */

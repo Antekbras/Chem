@@ -250,6 +250,10 @@ void card(uint8_t z, int8_t charge, work_t *w) {
     econfig(z, charge, &c);
     if (charge) {
         wf(w, "%S%q %u e-", z, charge, c.electrons);
+        if (ion_r2(z, charge)) {
+            fmt(put_r2(fmt(full, "Ionic radius "), ion_r2(z, charge)), " pm");
+            work_add(w, full, NULL, NULL, NULL);
+        }
     } else {
         uint16_t en = elements[z].en100;
         wf(w, "%u %S %s", z, z, elements[z].name);

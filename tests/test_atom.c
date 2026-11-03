@@ -8,6 +8,7 @@
 #include "../apps/ATOM/src/iso.c"
 #include "../apps/ATOM/src/info.c"
 #include "../apps/ATOM/src/orbital.c"
+#include "../apps/ATOM/src/rank.c"
 #include "../apps/ATOM/src/atomdata.c"
 #include "../src/common/entry.h"
 #include "plat_mock.h"
@@ -86,7 +87,7 @@ int main(void) {
     CHECK(work_has("Group 8 Period 4 d-block"), "card group");
     CHECK(work_has("Transition metal"), "card family");
     CHECK(work_has("metal, solid at 25oC"), "card type state");
-    CHECK(work_has("r 140pm cov.r 132pm") || work_has("r 140pm"), "card radii");
+    CHECK(work_has("r 156pm cov.r 116pm"), "card radii");
     CHECK(work_has("Most common: Fe-56") && work_has("26p 30n 26e"), "card isotope");
     CHECK(work_has("Shells 2 8 14 2"), "card shells");
     CHECK(work_has("4 unpaired: paramagnetic"), "card unpaired");
@@ -103,6 +104,21 @@ int main(void) {
     CHECK(work_has("Most stable: Og-294"), "og isotope");
     run("tc");
     CHECK(work_has("Mass [98]"), "tc mass");
+    /* strongest ionic bond: charge first, then the smaller ion */
+    want("na+ mg2+ sr2+ rb+", "Mg2+ > Sr2+ > Na+ > Rb+", "Mg2+ strongest");
+    CHECK(work_has("Strongest bond: Mg2+"), "rank head");
+    CHECK(work_has("1. Mg2+  charge 2  72 pm"), "rank mg row");
+    CHECK(work_has("4. Rb+  charge 1  152 pm"), "rank rb row");
+    CHECK(work_has("lattice energy"), "rank rule");
+    CHECK(ast.info_z == 0, "rank: TRACE shows work");
+    want("na+  k+ li+ cl-", "Li+ > Na+ > K+", "Li+ strongest");
+    CHECK(work_has("Strongest with Cl-: Li+"), "rank partner");
+    want("f- cl- o2- br-", "O2- > F- > Cl- > Br-", "O2- strongest");
+    want("fe2+ fe3+", "Fe3+ > Fe2+", NULL);
+    CHECK(work_has("64.5 pm"), "rank half pm");
+    want("na+ k+ cs+ li+ rb+ mg2+", "Mg2+ > Li+ > Na+ > K+ >\nRb+ > Cs+", NULL);
+    run("fe3+");
+    CHECK(work_has("Ionic radius 64.5 pm"), "ion card radius");
     for (uint8_t z = 1; z <= NUM_ELEMENTS; z++) {     /* every card fits */
         char s[8];
         sprintf(s, "%u", z);
@@ -179,7 +195,7 @@ int main(void) {
     {
         static const char *lines[] = {"fe3+", "cu2+", "cr", "29", "iron", "cl37", "c-14",
                                       "12nm>j", "12.0nm>hz", "5.00E14hz>nm", "3.31E~19j>nm",
-                                      "500.nm>kj/mol", "green", "violet"};
+                                      "500.nm>kj/mol", "green", "violet", "na+ mg2+ sr2+ rb+"};
         unsigned i;
         for (i = 0; i < sizeof lines / sizeof lines[0]; i++) {
             int k = extra_keys(lines[i]);
