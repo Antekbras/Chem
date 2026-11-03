@@ -2,9 +2,11 @@
 #ifdef __TICE__
 #include <time.h>
 #include <sys/lcd.h>
+#include <sys/power.h>
 #include <ti/screen.h>
 #include <ti/getcsc.h>
 #include "plat.h"
+#include "font.h"
 
 uint16_t *plat_vram(void) { return (uint16_t *)lcd_Ram; }
 
@@ -17,29 +19,16 @@ void plat_home_put(uint8_t row, uint8_t col, const char *s) {
     os_PutStrLine(s);
 }
 
-void plat_small(const char *s, uint16_t x, uint8_t y, uint16_t fg, uint16_t bg) {
-    os_FontSelect(os_SmallFont);
-    os_SetDrawFGColor(fg);
-    os_SetDrawBGColor(bg);
-    os_FontDrawText(s, x, y);
-    os_FontSelect(os_LargeFont);
+/* text: the built-in fonts (font.c), drawn straight into VRAM */
+uint16_t plat_text(const char *s, uint16_t x, uint8_t y, uint8_t flags, uint16_t fg, uint16_t bg) {
+    return font_draw((uint16_t *)lcd_Ram, s, x, y, flags, fg, bg);
 }
 
-uint16_t plat_small_width(const char *s) {
-    uint16_t w;
-    os_FontSelect(os_SmallFont);
-    w = (uint16_t)os_FontGetWidth(s);
-    os_FontSelect(os_LargeFont);
-    return w;
-}
+uint8_t plat_char_width(char c, uint8_t flags) { return font_char_width(c, flags); }
+uint16_t plat_text_width(const char *s, uint8_t flags) { return font_width(s, flags); }
+uint8_t plat_text_height(uint8_t flags) { return font_height(flags); }
 
-uint8_t plat_small_height(void) {
-    uint8_t h;
-    os_FontSelect(os_SmallFont);
-    h = (uint8_t)os_FontGetHeight();
-    os_FontSelect(os_LargeFont);
-    return h;
-}
+uint8_t plat_battery(void) { return boot_GetBatteryStatus(); }
 
 uint8_t plat_getcsc(void) { return os_GetCSC(); }
 

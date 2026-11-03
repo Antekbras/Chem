@@ -12,14 +12,26 @@ typedef struct {
     uint32_t smart;         /* SMART_ALL / SMART_CALC */
     /* fill out (big, right aligned) and small (plain decimal); add work lines */
     void (*compute)(const char *in, char *out, char *small, work_t *w);
-    /* optional: [Y=]..[TRACE] pressed (field 0..3) */
+    /* optional: a tab key whose label is not WORK/QUIT (n = 0..4, [Y=]..[GRAPH]) */
     void (*field)(uint8_t n);
     /* optional app data kept across runs (e.g. SIGFIG's Ans), <= APP_DATA_MAX */
     void *data;
     uint16_t data_size;
+    /* optional: title-bar text (default: title) and the hint under the input */
+    const char *heading;
+    const char *hint;
 } app_def_t;
 
 #define APP_DATA_MAX 48
+
+/* insert text at the cursor from a field callback (picked list item) */
+void app_insert(const char *text);
+
+/* optional, before app_run: tab labels for [Y=] [WINDOW] [ZOOM] [TRACE]
+ * [GRAPH]. "WORK" shows work, "QUIT" quits, "" is no tab, anything else
+ * calls d->field(n). Equal neighbours merge into one wide tab.
+ * Default: {"", "", "", "WORK", "QUIT"}. */
+void app_labels(const char *const labels[5]);
 
 /* run until 2nd+QUIT (or CLEAR on an empty screen); saves state on exit */
 void app_run(const app_def_t *d);
@@ -30,6 +42,9 @@ void app_close(const app_def_t *d);
 const entry_t *app_entry(void);
 const screen_t *app_screen(void);
 const work_t *app_work(void);
+/* from a field callback: put `text` on the entry line and compute it, as if
+ * typed + ENTER (the finished line before it goes to the history) */
+void app_enter(const char *text);
 
 /* Echo a typed line with auto-case, for the stubs and for show-work:
  * "250.0ml .640m nacl>g" -> "250.0mL .640M NaCl→g". Numbers keep their
